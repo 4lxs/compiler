@@ -1,18 +1,25 @@
-add_executable(intro main.cpp)
+# add_executable(kaleidoscope main.cpp)
+add_executable(kaleidoscope kaleidoscope.cpp)
 
-target_link_libraries(intro PRIVATE myproject::myproject_options
-                                    myproject::myproject_warnings)
+find_package(LLVM REQUIRED CONFIG)
 
-target_link_system_libraries(
-  intro
-  PRIVATE
-  CLI11::CLI11
-  fmt::fmt
-  spdlog::spdlog
-  lefticus::tools
-  ftxui::screen
-  ftxui::dom
-  ftxui::component)
+add_llvm_libs(
+  EXEC
+  kaleidoscope
+  LIBS
+  core
+  orcjit
+  native)
+
+target_link_libraries(
+  kaleidoscope
+  PRIVATE CLI11::CLI11
+          fmt::fmt
+          spdlog::spdlog
+          ${llvm_libs}
+          # myproject::myproject_options
+          # myproject::myproject_warnings
+)
 
 target_include_directories(
-  intro PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")
+  kaleidoscope PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")

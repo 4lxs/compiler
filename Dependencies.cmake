@@ -32,12 +32,27 @@ function(myproject_setup_dependencies)
     cpmaddpackage("gh:CLIUtils/CLI11@2.3.2")
   endif()
 
-  if(NOT TARGET ftxui::screen)
-    cpmaddpackage("gh:ArthurSonzogni/FTXUI@5.0.0")
-  endif()
+endfunction()
 
-  if(NOT TARGET tools::tools)
-    cpmaddpackage("gh:lefticus/tools#update_build_system")
-  endif()
+# setup llvm for the project
+function(add_llvm_libs)
+  cmake_parse_arguments(
+    ARG
+    ""
+    "EXEC"
+    "LIBS"
+    ${ARGN})
+  find_package(LLVM REQUIRED CONFIG)
 
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+  include_directories(${LLVM_INCLUDE_DIRS})
+  separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+  add_definitions(${LLVM_DEFINITIONS_LIST})
+
+  llvm_map_components_to_libnames(llvm_libs ${ARG_LIBS})
+  message(STATUS "LLVM libs: ${llvm_libs}")
+
+  target_link_libraries(${ARG_EXEC} PRIVATE ${llvm_libs})
 endfunction()

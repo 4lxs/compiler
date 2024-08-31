@@ -52,7 +52,6 @@ macro(myproject_enable_cppcheck WARNINGS_AS_ERRORS CPPCHECK_OPTIONS)
 endmacro()
 
 macro(myproject_enable_clang_tidy target WARNINGS_AS_ERRORS)
-
   find_program(CLANGTIDY clang-tidy)
   if(CLANGTIDY)
     if(NOT
