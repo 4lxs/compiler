@@ -1,16 +1,27 @@
-#include <llvm/ADT/APFloat.h>
+#include <spdlog/spdlog.h>
 
-#include <iostream>
+#include <cctype>
+#include <fstream>
+#include <iterator>
+#include <memory>
+#include <string>
+#include <utility>
 
-using namespace llvm;
-
-constexpr float FLOAT = 3.14F;
+#include "generator.hpp"
+#include "parser.hpp"
+#include "scanner.hpp"
 
 int main() {
-  const APFloat val{FLOAT};
-  (void)val;
+  std::ifstream file("file.x");
+  auto scanner = std::make_unique<Scanner>(std::string{
+      std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()});
 
-  std::cout << "hellyo\n";
+  Parser parser(std::move(scanner));
 
+  Generator gen;
+
+  while (parser.parse_toplevel(gen)) {
+    spdlog::info("got ast:");
+  }
   return 0;
 }

@@ -35,6 +35,9 @@
           ];
 
           buildInputs = [
+            pkgs.antlr4
+            pkgs.jdk
+
             config.formatter
 
             pkgs.cmake-lint

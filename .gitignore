@@ -6,6 +6,7 @@ cmake-build-*/
 conan-cache/
 /Testing
 /.cache
+/.antlr
 
 # User spesific settings
 CMakeUserPresets.json
