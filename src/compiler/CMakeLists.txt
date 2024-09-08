@@ -1,0 +1,220 @@
+set(NAME antlr_compiler)
+
+add_executable(
+  ${NAME}
+  main.cpp
+  antlr/exceptionErrorListener.hpp
+  antlr/exceptionErrorListener.hpp
+  # antlr/listener.cpp
+  # antlr/listener.hpp
+  antlr/visitor.cpp
+  antlr/visitor.hpp
+  ast/types.cpp
+  ast/types.hpp
+  # interpreter/interpreter.cpp
+  # interpreter/interpreter.hpp
+  # interpreter/environment.cpp
+  # interpreter/environment.hpp
+  # compiler/jit.cpp
+  # compiler/jit.hpp
+)
+
+find_package(LLVM REQUIRED CONFIG)
+add_llvm_libs(
+  EXEC
+  ${NAME}
+  LIBS
+  core
+  orcjit
+  native
+  support
+  # all
+  aarch64asmparser
+  aarch64codegen
+  aarch64desc
+  aarch64disassembler
+  aarch64info
+  aarch64utils
+  aggressiveinstcombine
+  amdgpuasmparser
+  amdgpucodegen
+  amdgpudesc
+  amdgpudisassembler
+  amdgpuinfo
+  amdgputargetmca
+  amdgpuutils
+  analysis
+  armasmparser
+  armcodegen
+  armdesc
+  armdisassembler
+  arminfo
+  armutils
+  asmparser
+  asmprinter
+  avrasmparser
+  avrcodegen
+  avrdesc
+  avrdisassembler
+  avrinfo
+  binaryformat
+  bitreader
+  bitstreamreader
+  bitwriter
+  bpfasmparser
+  bpfcodegen
+  bpfdesc
+  bpfdisassembler
+  bpfinfo
+  cfguard
+  codegen
+  codegendata
+  codegentypes
+  core
+  coroutines
+  coverage
+  debuginfobtf
+  debuginfocodeview
+  debuginfodwarf
+  debuginfogsym
+  executionengine
+  extensions
+  filecheck
+  frontenddriver
+  frontendhlsl
+  frontendoffloading
+  frontendopenacc
+  frontendopenmp
+  fuzzercli
+  fuzzmutate
+  globalisel
+  hexagonasmparser
+  hexagoncodegen
+  hexagondesc
+  hexagondisassembler
+  hexagoninfo
+  hipstdpar
+  instcombine
+  instrumentation
+  interfacestub
+  ipo
+  irprinter
+  irreader
+  jitlink
+  lanaiasmparser
+  lanaicodegen
+  lanaidesc
+  lanaidisassembler
+  lanaiinfo
+  libdriver
+  lineeditor
+  linker
+  loongarchasmparser
+  loongarchcodegen
+  loongarchdesc
+  loongarchdisassembler
+  loongarchinfo
+  lto
+  mc
+  mca
+  mcdisassembler
+  mcjit
+  mcparser
+  mipsasmparser
+  mipscodegen
+  mipsdesc
+  mipsdisassembler
+  mipsinfo
+  mirparser
+  msp430asmparser
+  msp430codegen
+  msp430desc
+  msp430disassembler
+  msp430info
+  native
+  nativecodegen
+  nvptxcodegen
+  nvptxdesc
+  nvptxinfo
+  objcarcopts
+  objcopy
+  object
+  objectyaml
+  option
+  orcdebugging
+  orcjit
+  orcshared
+  orctargetprocess
+  passes
+  powerpcasmparser
+  powerpccodegen
+  powerpcdesc
+  powerpcdisassembler
+  powerpcinfo
+  profiledata
+  remarks
+  riscvasmparser
+  riscvcodegen
+  riscvdesc
+  riscvdisassembler
+  riscvinfo
+  riscvtargetmca
+  runtimedyld
+  sandboxir
+  scalaropts
+  selectiondag
+  sparcasmparser
+  sparccodegen
+  sparcdesc
+  sparcdisassembler
+  sparcinfo
+  support
+  symbolize
+  systemzasmparser
+  systemzcodegen
+  systemzdesc
+  systemzdisassembler
+  systemzinfo
+  tablegen
+  target
+  targetparser
+  textapi
+  textapibinaryreader
+  transformutils
+  veasmparser
+  vecodegen
+  vectorize
+  vedesc
+  vedisassembler
+  veinfo
+  webassemblyasmparser
+  webassemblycodegen
+  webassemblydesc
+  webassemblydisassembler
+  webassemblyinfo
+  webassemblyutils
+  windowsdriver
+  x86asmparser
+  x86codegen
+  x86desc
+  x86disassembler
+  x86info
+  x86targetmca
+  xcorecodegen
+  xcoredesc
+  xcoredisassembler
+  xcoreinfo
+  xray)
+
+target_link_libraries(
+  ${NAME}
+  PRIVATE CLI11::CLI11
+          fmt::fmt
+          spdlog::spdlog
+          ${llvm_libs}
+          parser
+          myproject::myproject_options
+          myproject::myproject_warnings)
+
+target_include_directories(
+  ${NAME} PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")

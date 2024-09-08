@@ -31,5 +31,5 @@ add_library(myproject::myproject_warnings ALIAS myproject_warnings)
 
 add_subdirectory(configured_files)
 
-add_subdirectory(parser)
+add_subdirectory(grammar)
 add_subdirectory(src)
