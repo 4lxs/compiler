@@ -7,12 +7,11 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
+#include <spdlog/spdlog.h>
 
-#include <ranges>
 #include <variant>
 
-#include "../ast/types.hpp"
-#include "spdlog/spdlog.h"
+#include "x/ast/module.hpp"
 
 namespace x {
 

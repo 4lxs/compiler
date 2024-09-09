@@ -17,18 +17,24 @@ std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
 
   bool projScope = ctx->initSep == nullptr;
 
-  _module = _ctx->module(std::move(modulepath), projScope);
+  _module = _ctx->module(ast::Path(std::move(modulepath), projScope));
 
   return {};
 }
 
 std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
-  ast::FnProto prototype{
-      ctx->name->getText(), parseParams(ctx->params()),
-      ctx->ret == nullptr ? std::nullopt : std::optional(getType(ctx->ret))};
+  std::string name = ctx->name->getText();
 
-  ast::Fn* func = _module->function(std::move(prototype));
-  _block = func;
+  ast::FnProto prototype{
+      std::move(name), parse_params(ctx->params()),
+      ctx->ret == nullptr ? std::nullopt : std::optional(get_stub(ctx->ret))};
+
+  auto func = std::make_unique<ast::Fn>(_module, std::move(prototype));
+
+  _block = func.get();
+
+  ast::Stub* stub = _module->get_stub(std::string{prototype.name});
+  stub->define_function(std::move(func));
 
   visitBlock(ctx->block());
   return {};
@@ -56,7 +62,7 @@ std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
 
   ast::Expr expr = _stack.pop();
 
-  _block->call(getPath(ctx->fn), expr.into<ast::StructExpr>());
+  _block->call(get_stub(ctx->fn), expr.into<ast::StructExpr>());
 
   return {};
 }
@@ -84,7 +90,7 @@ std::any Visitor::visitAnonStruct(parser::XParser::AnonStructContext* ctx) {
   return {};
 }
 
-std::vector<ast::FnParam> Visitor::parseParams(
+std::vector<ast::FnParam> Visitor::parse_params(
     parser::XParser::ParamsContext* ctx) {
   auto names = ctx->Ident();
   auto types = ctx->path();
@@ -93,17 +99,13 @@ std::vector<ast::FnParam> Visitor::parseParams(
   std::vector<ast::FnParam> params;
   params.reserve(names.size());
   for (auto&& [name, type] : std::views::zip(names, types)) {
-    params.emplace_back(name->getText(), getType(type));
+    params.emplace_back(name->getText(), get_stub(type));
   }
 
   return params;
 }
 
-ast::Type* Visitor::getType(parser::XParser::PathContext* ctx) const {
-  return _module->type(getPath(ctx));
-}
-
-ast::Path* Visitor::getPath(parser::XParser::PathContext* ctx) const {
+ast::Stub* Visitor::get_stub(parser::XParser::PathContext* ctx) const {
   std::vector<std::string> components;
 
   for (auto* ident : ctx->Ident()) {
@@ -112,7 +114,7 @@ ast::Path* Visitor::getPath(parser::XParser::PathContext* ctx) const {
 
   bool projScope = ctx->initSep == nullptr;
 
-  return _module->path(std::move(components), projScope);
+  return _module->get_stub(ast::Path{std::move(components), projScope});
 }
 
 ast::Expr Visitor::Stack_::pop() {

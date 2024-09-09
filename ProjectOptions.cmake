@@ -118,6 +118,8 @@ macro(myproject_local_options)
                                 ${myproject_WARNINGS_AS_ERRORS})
   endif()
 
+  myproject_enable_include_what_you_use()
+
   if(myproject_ENABLE_CPPCHECK)
     myproject_enable_cppcheck(
       ${myproject_WARNINGS_AS_ERRORS} "" # override cppcheck options

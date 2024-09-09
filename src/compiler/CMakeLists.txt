@@ -1,23 +1,14 @@
-set(NAME antlr_compiler)
+set(NAME compiler)
 
 add_executable(
   ${NAME}
   main.cpp
+  handroll.hpp
   antlr/exceptionErrorListener.hpp
-  antlr/exceptionErrorListener.hpp
-  # antlr/listener.cpp
-  # antlr/listener.hpp
   antlr/visitor.cpp
   antlr/visitor.hpp
-  ast/types.cpp
-  ast/types.hpp
-  # interpreter/interpreter.cpp
-  # interpreter/interpreter.hpp
-  # interpreter/environment.cpp
-  # interpreter/environment.hpp
-  # compiler/jit.cpp
-  # compiler/jit.hpp
-)
+  compiler/compiler.cpp
+  compiler/compiler.hpp)
 
 find_package(LLVM REQUIRED CONFIG)
 add_llvm_libs(
@@ -213,6 +204,7 @@ target_link_libraries(
           spdlog::spdlog
           ${llvm_libs}
           parser
+          ast
           myproject::myproject_options
           myproject::myproject_warnings)
 

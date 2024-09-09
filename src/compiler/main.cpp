@@ -22,7 +22,6 @@
 #include "XLexer.h"
 #include "antlr/exceptionErrorListener.hpp"
 #include "antlr/visitor.hpp"
-#include "ast/types.hpp"
 #include "compiler/compiler.hpp"
 #include "handroll.hpp"
 #include "spdlog/spdlog.h"

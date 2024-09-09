@@ -8,9 +8,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 
-#include <stack>
-
-#include "../ast/types.hpp"
+#include "x/ast/context.hpp"
+#include "x/ast/stmt.hpp"
 
 namespace x {
 
@@ -32,10 +31,11 @@ class Visitor : public parser::XBaseVisitor {
   std::any visitAnonStruct(parser::XParser::AnonStructContext *ctx) override;
 
  private:
-  std::vector<ast::FnParam> parseParams(parser::XParser::ParamsContext *ctx);
+  [[nodiscard]]
+  std::vector<ast::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
 
-  ast::Type *getType(parser::XParser::PathContext *ctx) const;
-  ast::Path *getPath(parser::XParser::PathContext *ctx) const;
+  [[nodiscard]]
+  ast::Stub *get_stub(parser::XParser::PathContext *ctx) const;
 
   ast::Context *_ctx;
 
