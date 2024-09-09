@@ -1,73 +1,63 @@
+#include "x/ast/stmt.hpp"
+
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "x/ast/block.hpp"
-#include "x/ast/expr.hpp"
+#include "x/ast/module.hpp"
 
 namespace x::ast {
 
-class Type;
+Ptr<RetStmtV> RetStmt::validate() {
+  return std::make_unique<RetStmtV>(std::move(_retVal));
+}
 
-struct FnParam {
-  std::string name;
-  Type *type;
+//============================//
+
+StmtV Stmt::validate() {
+  return std::visit([](auto &&stmt) { return StmtV{stmt->validate()}; },
+                    std::move(_stmt));
+}
+
+//============================//
+
+Ptr<CallV> Call::validate() {
+  return std::make_unique<CallV>(fn->validate<Fn>()->validate(),
+                                 std::move(args));
+}
+
+//============================//
+
+Fn::Fn(Module *mod, FnProto &&proto) : Block{mod}, _proto{std::move(proto)} {
+  for (const auto &[_, arg] : proto.params) {
+    arg->use_type();
+  }
 };
 
-struct FnProto {
-  std::string name;
+std::string_view Fn::name() const { return _proto.name; }
 
-  // non null
-  std::vector<FnParam> params;
+FnV *Fn::validate() {
+  if (_val != nullptr) {
+    return _val.get();
+  }
+  spdlog::info("validating function {}", name());
 
-  std::optional<Type *> ret;
-};
+  std::vector<FnV::Param> params;
+  params.reserve(_proto.params.size());
 
-class RetStmt {
- public:
-  /// @param val: return val;
-  ///   nullptr -> return;
-  explicit RetStmt(std::optional<Expr> val) : _val{std::move(val)} {};
+  for (auto &&[name, type] : _proto.params) {
+    params.push_back(FnV::Param(std::move(name), type->validate<Type>()));
+  }
 
-  std::optional<Expr> _val;
-};
+  Block::validate();
 
-class VarDef {};
+  Type *ret = _proto.ret != nullptr ? _proto.ret->validate<Type>() : nullptr;
 
-class TypeDef {};
+  _val = std::make_unique<FnV>(std::move(_proto.name), std::move(params),
+                               std::move(Block::_val), ret);
 
-class Block;
-class Fn;
-class Call;
-
-class Stmt {
-  template <typename T>
-  auto accept(T const &consumer) {
-    return std::visit(consumer, _val);
-  };
-
- public:
-  std::variant<Ptr<Expr>, Ptr<TypeDef>, Ptr<VarDef>, Ptr<Fn>, Ptr<Block>,
-               Ptr<RetStmt>, Ptr<Call>>
-      _val;
-};
-
-class Call {
- public:
-  Fn *fn;
-  Ptr<StructExpr> args;
-};
-
-class Fn : public Block {
- private:
- public:
-  friend class Module;
-  explicit Fn(Module *mod, FnProto &&proto)
-      : Block{mod}, _proto{std::move(proto)} {};
-
-  [[nodiscard]] const std::string &name() const { return _proto.name; }
-
-  FnProto _proto;
-};
+  return _val.get();
+}
 
 }  // namespace x::ast

@@ -9,32 +9,31 @@
 #include <llvm/IR/Verifier.h>
 #include <spdlog/spdlog.h>
 
+#include <ranges>
 #include <variant>
 
+#include "x/ast/expr.hpp"
 #include "x/ast/module.hpp"
+#include "x/ast/type.hpp"
 
 namespace x {
 
-template <class... Ts>
-struct overloaded : Ts... {
-  using Ts::operator()...;
-};
-
 class Compiler {
  public:
-  void compile(const ast::Module& module) {
-    for (const auto& [_, fnctn] : module._functions) {
+  void compile(const ast::Module::Val& module) {
+    for (const auto& fnctn : module._functions) {
+      spdlog::info("compiling function {}", fmt::ptr(fnctn.get()));
       // we need to forward declare all functions
-      function(fnctn->_proto);
+      function(*fnctn);
     }
 
-    for (const auto& [_, fnctn] : module._functions) {
-      llvm::Function* func = _mod.getFunction(fnctn->_proto.name);
+    for (const auto& fnctn : module._functions) {
+      llvm::Function* func = _mod.getFunction(fnctn->name);
       llvm::BasicBlock* body = llvm::BasicBlock::Create(_ctx, "entry", func);
       _builder.SetInsertPoint(body);
 
       spdlog::info("body");
-      for (const auto& stmt : fnctn->_body) {
+      for (const auto& stmt : fnctn->block->body) {
         spdlog::info("stmt");
         compile(stmt);
       }
@@ -44,30 +43,30 @@ class Compiler {
     }
   };
 
-  void compile(const ast::Stmt& stmt) {
-    std::visit([this](const auto& stmt) { visitStmt(stmt); }, stmt._val);
+  void compile(const ast::StmtV& stmt) {
+    std::visit([this](const auto& stmt) { visitStmt(*stmt); }, stmt.stmt);
   }
+  //
+  // void visitStmt(const std::unique_ptr<ast::Expr>& expr) {
+  //   llvm::Value* val = eval(*expr);
+  //   if (val != nullptr) {
+  //     spdlog::warn("unused value");
+  //   }
+  // }
 
-  void visitStmt(const std::unique_ptr<ast::Expr>& expr) {
-    llvm::Value* val = eval(*expr);
-    if (val != nullptr) {
-      spdlog::warn("unused value");
-    }
-  }
-
-  void visitStmt(const std::unique_ptr<ast::RetStmt>& ret) {
+  void visitStmt(const ast::RetStmtV& ret) {
     spdlog::info("ret");
-    _builder.CreateRet(ret->_val.has_value() ? eval(*ret->_val) : nullptr);
+    _builder.CreateRet(ret._val.has_value() ? eval(*ret._val) : nullptr);
   }
 
-  void visitStmt(const std::unique_ptr<ast::Call>& stmt) {
-    llvm::Function* calee = _mod.getFunction(stmt->fn->name());
+  void visitStmt(const ast::CallV& stmt) {
+    llvm::Function* calee = _mod.getFunction(stmt.fn->name);
     assert(calee);
-    assert(calee->arg_size() == stmt->args->fields.size());
+    assert(calee->arg_size() == stmt.args->fields.size());
 
     std::vector<llvm::Value*> args;
     args.reserve(calee->arg_size());
-    for (const ast::Field& field : stmt->args->fields) {
+    for (const ast::Field& field : stmt.args->fields) {
       llvm::Value* val = eval(field.value);
       assert(val != nullptr);
       args.push_back(val);
@@ -76,7 +75,7 @@ class Compiler {
     _builder.CreateCall(calee, args);
   }
 
-  void visitStmt(const auto& stmt) { std::terminate(); }
+  // void visitStmt(const auto& stmt) { std::terminate(); }
 
   llvm::Value* eval(const ast::Expr& expr) {
     return expr.accept([this](const auto& expr) { return visitExpr(expr); });
@@ -86,13 +85,20 @@ class Compiler {
     return llvm::ConstantInt::get(_ctx, llvm::APInt(32, expr->_val, 10));
   }
 
-  llvm::Value* visitExpr(const auto& expr) { assert(false); }
-
   llvm::Value* visitExpr(const std::unique_ptr<ast::ParenExpr>& expr) {
     return eval(expr->inner);
   }
 
-  llvm::Function* function(const ast::FnProto& proto) {
+  llvm::Value* visitExpr(const std::unique_ptr<ast::BinaryExpr>& expr) {
+    llvm::Value* lhs = eval(expr->l);
+    llvm::Value* rhs = eval(expr->r);
+
+    return _builder.CreateAdd(lhs, rhs);
+  }
+
+  llvm::Value* visitExpr(const auto& expr) { assert(false); }
+
+  llvm::Function* function(const ast::FnV& proto) {
     spdlog::info("function {}({})", proto.name, proto.params.size());
     std::vector<llvm::Type*> argTypes{};
     argTypes.reserve(proto.params.size());
@@ -100,10 +106,10 @@ class Compiler {
       argTypes.push_back(to_llvm_type(prm.type));
     }
 
-    auto* funcType = llvm::FunctionType::get(
-        proto.ret.has_value() ? to_llvm_type(proto.ret.value())
-                              : llvm::Type::getVoidTy(_ctx),
-        argTypes, false);
+    auto* funcType = llvm::FunctionType::get(proto.ret != nullptr
+                                                 ? to_llvm_type(proto.ret)
+                                                 : llvm::Type::getVoidTy(_ctx),
+                                             argTypes, false);
     auto* func = llvm::Function::Create(
         funcType, llvm::Function::ExternalLinkage, proto.name, _mod);
 
@@ -115,7 +121,8 @@ class Compiler {
     return func;
   }
 
-  llvm::Type* to_llvm_type(ast::Type* /*type*/) {
+  llvm::Type* to_llvm_type(ast::Type* type) {
+    spdlog::info("getting type: {}", fmt::underlying(type->_kind));
     return llvm::Type::getInt32Ty(_ctx);
   }
 

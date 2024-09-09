@@ -4,6 +4,9 @@
 #include <memory>
 #include <ranges>
 
+#include "XParser.h"
+#include "x/ast/expr.hpp"
+
 namespace x {
 
 Visitor::Visitor(ast::Context* ctx) : _ctx{ctx} {}
@@ -15,9 +18,10 @@ std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
     modulepath.emplace_back(ident->toString());
   }
 
-  bool projScope = ctx->initSep == nullptr;
+  bool external = ctx->initSep != nullptr;
+  spdlog::info("external? {}", external);
 
-  _module = _ctx->module(ast::Path(std::move(modulepath), projScope));
+  _module = _ctx->module(ast::Path(std::move(modulepath), external));
 
   return {};
 }
@@ -25,15 +29,15 @@ std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
 std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
   std::string name = ctx->name->getText();
 
-  ast::FnProto prototype{
-      std::move(name), parse_params(ctx->params()),
-      ctx->ret == nullptr ? std::nullopt : std::optional(get_stub(ctx->ret))};
+  ast::Stub* retStub = ctx->ret != nullptr ? get_stub(ctx->ret) : nullptr;
+
+  ast::FnProto prototype{std::move(name), parse_params(ctx->params()), retStub};
 
   auto func = std::make_unique<ast::Fn>(_module, std::move(prototype));
 
   _block = func.get();
 
-  ast::Stub* stub = _module->get_stub(std::string{prototype.name});
+  ast::Stub* stub = _module->get_stub(std::string{func->name()});
   stub->define_function(std::move(func));
 
   visitBlock(ctx->block());
@@ -69,6 +73,44 @@ std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
 
 std::any Visitor::visitIntPE(parser::XParser::IntPEContext* ctx) {
   _stack.push(ast::PrimaryExpr::Int(ctx->getText()));
+
+  return {};
+}
+
+std::any Visitor::visitBinaryE(parser::XParser::BinaryEContext* ctx) {
+  visitChildren(ctx);
+  auto exprs = _stack.pop(2);
+
+  using Op = ast::BinaryExpr::Operator;
+  using Tok = parser::XParser;
+  Op opr{};
+
+  switch (ctx->bop->getType()) {
+    case Tok::Plus:
+      opr = Op::Plus;
+      break;
+    case Tok::Minus:
+      opr = Op::Minus;
+      break;
+    case Tok::Star:
+      opr = Op::Star;
+      break;
+    case Tok::Slash:
+      opr = Op::Slash;
+      break;
+    case Tok::Greater:
+      opr = Op::Greater;
+      break;
+    case Tok::Less:
+      opr = Op::Less;
+      break;
+    default:
+      spdlog::error("unexpected token");
+      std::terminate();
+  }
+
+  _stack.push(std::make_unique<ast::BinaryExpr>(std::move(exprs[0]),
+                                                std::move(exprs[1]), opr));
 
   return {};
 }
@@ -112,9 +154,10 @@ ast::Stub* Visitor::get_stub(parser::XParser::PathContext* ctx) const {
     components.emplace_back(ident->toString());
   }
 
-  bool projScope = ctx->initSep == nullptr;
+  bool external = ctx->initSep != nullptr;
+  spdlog::info("external? {}", external);
 
-  return _module->get_stub(ast::Path{std::move(components), projScope});
+  return _module->get_stub(ast::Path{std::move(components), external});
 }
 
 ast::Expr Visitor::Stack_::pop() {

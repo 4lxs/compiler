@@ -63,6 +63,7 @@ class Expr {
 };
 
 class BinaryExpr {
+ public:
   enum class Operator {
     Plus,
     Minus,

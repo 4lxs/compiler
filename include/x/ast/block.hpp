@@ -10,8 +10,10 @@
 namespace x::ast {
 
 class Module;
-class Stmt;
 class Stub;
+class Stmt;
+struct StmtV;
+struct BlockV;
 
 class Block {
  public:
@@ -20,12 +22,22 @@ class Block {
   /// call the function at the stub
   void call(Stub *func, Ptr<StructExpr> args);
 
+ protected:
   explicit Block(Module *mod);
 
-  // private:
+  /// see `Context::validate()`
+  BlockV *validate();
+
+  /// see `Module::validate()`
+  Ptr<BlockV> _val;
+
   std::vector<Stmt> _body;
 
   Module *_mod;
+};
+
+struct BlockV {
+  std::vector<StmtV> body;
 };
 
 }  // namespace x::ast

@@ -24,11 +24,28 @@ class Path;
 /// be able to link those two together
 class Context {
  public:
-  Context() = default;
+  static Ptr<Context> Create();
 
+  struct Val {
+    std::vector<Ptr<Module::Val>> modules;
+  };
+
+  /// checks for inconsistencies. undefined stubs, multiple
+  /// definitions, ...
+  /// it also evaluates items to their definition and links
+  /// them with other stubs.
+  ///
+  /// note that calling this function invalidates the context and all pointers
+  /// obtained from it
+  static Ptr<Val> validate(Ptr<Context> context);
+
+  /// return the module at path and create it if it doesn't
+  /// exist
   Module *module(Path &&path);
 
  private:
+  Context() = default;
+
   friend Module;
 
   /// this function is called by module to get stubs

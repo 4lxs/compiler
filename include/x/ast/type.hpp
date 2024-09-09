@@ -1,12 +1,28 @@
 #pragma once
 
-#include <string>
+#include "x/common.h"
 
 namespace x::ast {
 
+struct TypeV;
+
 class Type {
  public:
-  std::string path;
+  friend class Module;
+
+  enum class Kind {
+    Integer,
+  } _kind;
+
+  /// see `Context::validate()`
+  TypeV* validate();
+
+  /// see `Module::validate()`
+  Ptr<TypeV> _val;
+};
+
+struct TypeV {
+  Type::Kind kind;
 };
 
 }  // namespace x::ast

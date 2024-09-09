@@ -28,6 +28,8 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitIntPE(parser::XParser::IntPEContext *ctx) override;
 
+  std::any visitBinaryE(parser::XParser::BinaryEContext *ctx) override;
+
   std::any visitAnonStruct(parser::XParser::AnonStructContext *ctx) override;
 
  private:
