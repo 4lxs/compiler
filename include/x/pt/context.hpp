@@ -3,10 +3,10 @@
 #include <map>
 #include <vector>
 
-#include "x/ast/module.hpp"
 #include "x/common.h"
+#include "x/pt/module.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 class Fn;
 
@@ -113,4 +113,4 @@ class Path {
 
 std::string format_as(const Path &path);
 
-}  // namespace x::ast
+}  // namespace x::pt

@@ -5,11 +5,11 @@
 #include <variant>
 
 #include "spdlog/spdlog.h"
-#include "x/ast/stmt.hpp"
-#include "x/ast/type.hpp"
 #include "x/common.h"
+#include "x/pt/stmt.hpp"
+#include "x/pt/type.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 class Context;
 class Path;
@@ -102,4 +102,4 @@ class Stub {
   Path *_path;
 };
 
-}  // namespace x::ast
+}  // namespace x::pt

@@ -204,7 +204,7 @@ target_link_libraries(
           spdlog::spdlog
           ${llvm_libs}
           parser
-          ast
+          pt
           myproject::myproject_options
           myproject::myproject_warnings)
 

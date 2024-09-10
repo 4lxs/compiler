@@ -8,14 +8,14 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 
-#include "x/ast/context.hpp"
-#include "x/ast/stmt.hpp"
+#include "x/pt/context.hpp"
+#include "x/pt/stmt.hpp"
 
 namespace x {
 
 class Visitor : public parser::XBaseVisitor {
  public:
-  explicit Visitor(ast::Context *ctx);
+  explicit Visitor(pt::Context *ctx);
 
  protected:
   std::any visitModdef(parser::XParser::ModdefContext *ctx) override;
@@ -34,21 +34,21 @@ class Visitor : public parser::XBaseVisitor {
 
  private:
   [[nodiscard]]
-  std::vector<ast::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
+  std::vector<pt::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
 
   [[nodiscard]]
-  ast::Stub *get_stub(parser::XParser::PathContext *ctx) const;
+  pt::Stub *get_stub(parser::XParser::PathContext *ctx) const;
 
-  ast::Context *_ctx;
+  pt::Context *_ctx;
 
   // set in visitModdef. should never be null
  public:
-  ast::Module *_module{nullptr};
+  pt::Module *_module{nullptr};
 
  private:
   /// this is non-null while we're in a block.
   /// it has the value of the inner-most block
-  ast::Block *_block{};
+  pt::Block *_block{};
 
   class Stack_ {
    public:
@@ -59,12 +59,12 @@ class Visitor : public parser::XBaseVisitor {
       _stack.emplace_back(std::move(args)...);
     };
 
-    ast::Expr pop();
-    std::vector<ast::Expr> pop(size_t cnt);
+    pt::Expr pop();
+    std::vector<pt::Expr> pop(size_t cnt);
 
    private:
     // stack for storing values. std::any doesn't allow non-copyable types
-    std::vector<ast::Expr> _stack;
+    std::vector<pt::Expr> _stack;
   } _stack;
 };
 

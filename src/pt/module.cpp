@@ -1,13 +1,13 @@
-#include "x/ast/module.hpp"
+#include "x/pt/module.hpp"
 
 #include <exception>
 #include <variant>
 
 #include "spdlog/spdlog.h"
-#include "x/ast/context.hpp"
 #include "x/common.h"
+#include "x/pt/context.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 Stub *Module::get_stub(std::string &&local_name) {
   spdlog::info("getting stub: local={}", local_name);
@@ -110,4 +110,4 @@ void Stub::define_type(Ptr<Type> type) {
 
 Stub::Stub(Path *path) : _path{path} {}
 
-}  // namespace x::ast
+}  // namespace x::pt

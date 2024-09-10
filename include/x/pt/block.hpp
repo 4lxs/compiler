@@ -7,7 +7,7 @@
 
 #include "expr.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 class Module;
 class Stub;
@@ -40,4 +40,4 @@ struct BlockV {
   std::vector<StmtV> body;
 };
 
-}  // namespace x::ast
+}  // namespace x::pt

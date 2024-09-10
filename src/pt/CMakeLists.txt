@@ -1,6 +1,6 @@
 include(GenerateExportHeader)
 
-set(NAME ast)
+set(NAME pt)
 
 add_library(
   ${NAME}
@@ -34,7 +34,7 @@ set_target_properties(
              VISIBILITY_INLINES_HIDDEN YES)
 
 generate_export_header(${NAME} EXPORT_FILE_NAME
-                       ${PROJECT_BINARY_DIR}/include/myproject/ast_export.hpp)
+                       ${PROJECT_BINARY_DIR}/include/myproject/pt_export.hpp)
 
 if(NOT BUILD_SHARED_LIBS)
   target_compile_definitions(${NAME} PUBLIC SAMPLE_LIBRARY_STATIC_DEFINE)

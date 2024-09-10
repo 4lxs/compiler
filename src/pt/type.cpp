@@ -1,6 +1,6 @@
-#include "x/ast/type.hpp"
+#include "x/pt/type.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 TypeV* Type::validate() {
   if (_val != nullptr) {
@@ -11,4 +11,4 @@ TypeV* Type::validate() {
   return _val.get();
 }
 
-}  // namespace x::ast
+}  // namespace x::pt

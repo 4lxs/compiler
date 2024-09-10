@@ -1,12 +1,12 @@
-#include "x/ast/context.hpp"
+#include "x/pt/context.hpp"
 
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
-#include "x/ast/module.hpp"
+#include "x/pt/module.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 //============
 // Context
@@ -66,4 +66,4 @@ std::string format_as(const Path &path) {
                      fmt::join(path._components, "::"));
 }
 
-}  // namespace x::ast
+}  // namespace x::pt

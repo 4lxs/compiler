@@ -3,12 +3,12 @@
 #include <cassert>
 #include <memory>
 #include <variant>
-#include <x/ast/block.hpp>
+#include <x/pt/block.hpp>
 
-#include "x/ast/module.hpp"
-#include "x/ast/stmt.hpp"
+#include "x/pt/module.hpp"
+#include "x/pt/stmt.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 void Block::ret(std::optional<Expr> retval) {
   _body.emplace_back(std::make_unique<RetStmt>(std::move(retval)));
@@ -33,4 +33,4 @@ auto Block::validate() -> BlockV * {
   return _val.get();
 }
 
-}  // namespace x::ast
+}  // namespace x::pt

@@ -1,13 +1,13 @@
-#include "x/ast/stmt.hpp"
+#include "x/pt/stmt.hpp"
 
 #include <optional>
 #include <string>
 #include <vector>
 
-#include "x/ast/block.hpp"
-#include "x/ast/module.hpp"
+#include "x/pt/block.hpp"
+#include "x/pt/module.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 Ptr<RetStmtV> RetStmt::validate() {
   return std::make_unique<RetStmtV>(std::move(_retVal));
@@ -60,4 +60,4 @@ FnV *Fn::validate() {
   return _val.get();
 }
 
-}  // namespace x::ast
+}  // namespace x::pt

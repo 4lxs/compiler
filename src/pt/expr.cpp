@@ -3,7 +3,7 @@
 #include <variant>
 #include <vector>
 
-namespace x::ast {
+namespace x::pt {
 
 class PrimaryExpr {
  public:
@@ -94,4 +94,4 @@ class StructExpr {
   std::vector<Field> fields;
 };
 
-}  // namespace x::ast
+}  // namespace x::pt

@@ -25,7 +25,7 @@
 #include "compiler/compiler.hpp"
 #include "handroll.hpp"
 #include "spdlog/spdlog.h"
-#include "x/ast/context.hpp"
+#include "x/pt/context.hpp"
 
 using namespace parser;
 using namespace x;
@@ -82,7 +82,7 @@ void compile(llvm::Module &module) {
 }
 
 void compile(std::string_view filename) {
-  auto ctx = ast::Context::Create();
+  auto ctx = pt::Context::Create();
 
   Visitor visitor(ctx.get());
   std::ifstream inf(filename.data());
@@ -129,7 +129,7 @@ void compile(std::string_view filename) {
   //   llvm::outs() << "\n";
   // }
 
-  auto ctxVal = ast::Context::validate(std::move(ctx));
+  auto ctxVal = pt::Context::validate(std::move(ctx));
 
   Compiler compiler;
 

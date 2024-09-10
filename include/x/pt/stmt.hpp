@@ -4,11 +4,11 @@
 #include <string>
 #include <vector>
 
-#include "x/ast/block.hpp"
-#include "x/ast/expr.hpp"
-#include "x/ast/type.hpp"
+#include "x/pt/block.hpp"
+#include "x/pt/expr.hpp"
+#include "x/pt/type.hpp"
 
-namespace x::ast {
+namespace x::pt {
 
 class Stub;
 
@@ -122,4 +122,4 @@ struct FnV {
   Type *ret;
 };
 
-}  // namespace x::ast
+}  // namespace x::pt

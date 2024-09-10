@@ -2,7 +2,7 @@
 
 #include "x/common.h"
 
-namespace x::ast {
+namespace x::pt {
 
 struct TypeV;
 
@@ -25,4 +25,4 @@ struct TypeV {
   Type::Kind kind;
 };
 
-}  // namespace x::ast
+}  // namespace x::pt

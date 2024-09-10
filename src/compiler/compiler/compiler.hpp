@@ -12,15 +12,15 @@
 #include <ranges>
 #include <variant>
 
-#include "x/ast/expr.hpp"
-#include "x/ast/module.hpp"
-#include "x/ast/type.hpp"
+#include "x/pt/expr.hpp"
+#include "x/pt/module.hpp"
+#include "x/pt/type.hpp"
 
 namespace x {
 
 class Compiler {
  public:
-  void compile(const ast::Module::Val& module) {
+  void compile(const pt::Module::Val& module) {
     for (const auto& fnctn : module._functions) {
       spdlog::info("compiling function {}", fmt::ptr(fnctn.get()));
       // we need to forward declare all functions
@@ -43,30 +43,30 @@ class Compiler {
     }
   };
 
-  void compile(const ast::StmtV& stmt) {
+  void compile(const pt::StmtV& stmt) {
     std::visit([this](const auto& stmt) { visitStmt(*stmt); }, stmt.stmt);
   }
   //
-  // void visitStmt(const std::unique_ptr<ast::Expr>& expr) {
+  // void visitStmt(const std::unique_ptr<pt::Expr>& expr) {
   //   llvm::Value* val = eval(*expr);
   //   if (val != nullptr) {
   //     spdlog::warn("unused value");
   //   }
   // }
 
-  void visitStmt(const ast::RetStmtV& ret) {
+  void visitStmt(const pt::RetStmtV& ret) {
     spdlog::info("ret");
     _builder.CreateRet(ret._val.has_value() ? eval(*ret._val) : nullptr);
   }
 
-  void visitStmt(const ast::CallV& stmt) {
+  void visitStmt(const pt::CallV& stmt) {
     llvm::Function* calee = _mod.getFunction(stmt.fn->name);
     assert(calee);
     assert(calee->arg_size() == stmt.args->fields.size());
 
     std::vector<llvm::Value*> args;
     args.reserve(calee->arg_size());
-    for (const ast::Field& field : stmt.args->fields) {
+    for (const pt::Field& field : stmt.args->fields) {
       llvm::Value* val = eval(field.value);
       assert(val != nullptr);
       args.push_back(val);
@@ -77,19 +77,19 @@ class Compiler {
 
   // void visitStmt(const auto& stmt) { std::terminate(); }
 
-  llvm::Value* eval(const ast::Expr& expr) {
+  llvm::Value* eval(const pt::Expr& expr) {
     return expr.accept([this](const auto& expr) { return visitExpr(expr); });
   }
 
-  llvm::Value* visitExpr(const std::unique_ptr<ast::PrimaryExpr>& expr) {
+  llvm::Value* visitExpr(const std::unique_ptr<pt::PrimaryExpr>& expr) {
     return llvm::ConstantInt::get(_ctx, llvm::APInt(32, expr->_val, 10));
   }
 
-  llvm::Value* visitExpr(const std::unique_ptr<ast::ParenExpr>& expr) {
+  llvm::Value* visitExpr(const std::unique_ptr<pt::ParenExpr>& expr) {
     return eval(expr->inner);
   }
 
-  llvm::Value* visitExpr(const std::unique_ptr<ast::BinaryExpr>& expr) {
+  llvm::Value* visitExpr(const std::unique_ptr<pt::BinaryExpr>& expr) {
     llvm::Value* lhs = eval(expr->l);
     llvm::Value* rhs = eval(expr->r);
 
@@ -98,7 +98,7 @@ class Compiler {
 
   llvm::Value* visitExpr(const auto& expr) { assert(false); }
 
-  llvm::Function* function(const ast::FnV& proto) {
+  llvm::Function* function(const pt::FnV& proto) {
     spdlog::info("function {}({})", proto.name, proto.params.size());
     std::vector<llvm::Type*> argTypes{};
     argTypes.reserve(proto.params.size());
@@ -121,7 +121,7 @@ class Compiler {
     return func;
   }
 
-  llvm::Type* to_llvm_type(ast::Type* type) {
+  llvm::Type* to_llvm_type(pt::Type* type) {
     spdlog::info("getting type: {}", fmt::underlying(type->_kind));
     return llvm::Type::getInt32Ty(_ctx);
   }
