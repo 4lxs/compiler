@@ -1,3 +1,4 @@
+#include <XLexer.h>
 #include <XParser.h>
 #include <XVisitor.h>
 #include <antlr4-runtime.h>
@@ -12,6 +13,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/TargetParser/Host.h>
+#include <spdlog/spdlog.h>
 #include <tree/IterativeParseTreeWalker.h>
 #include <tree/ParseTreeVisitor.h>
 
@@ -19,13 +21,14 @@
 #include <iostream>
 #include <string_view>
 
-#include "XLexer.h"
 #include "antlr/exceptionErrorListener.hpp"
 #include "antlr/visitor.hpp"
 #include "compiler/compiler.hpp"
 #include "handroll.hpp"
-#include "spdlog/spdlog.h"
+#include "x/ast/context.hpp"
+#include "x/ast/type.hpp"
 #include "x/pt/context.hpp"
+#include "x/sema/sema.hpp"
 
 using namespace parser;
 using namespace x;
@@ -43,15 +46,15 @@ void compile(llvm::Module &module) {
   llvm::InitializeAllAsmParsers();
   llvm::InitializeAllAsmPrinters();
   std::string Error;
-  const llvm::Target *Target =
+  llvm::Target const *Target =
       llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
 
   if (Target == nullptr) {
     llvm::errs() << Error;
-    exit(1);
+    std::terminate();
   }
-  const std::string_view CPU{"generic"};
-  const std::string_view Features{};
+  std::string_view const CPU{"generic"};
+  std::string_view const Features{};
 
   llvm::TargetOptions opt;
   llvm::TargetMachine *TargetMachine = Target->createTargetMachine(
@@ -60,13 +63,13 @@ void compile(llvm::Module &module) {
   module.setDataLayout(TargetMachine->createDataLayout());
   module.setTargetTriple(TargetTriple);
 
-  const std::string_view Filename = "output.o";
+  std::string_view const Filename = "output.o";
   std::error_code errcode;
   llvm::raw_fd_ostream dest(Filename, errcode, llvm::sys::fs::OF_None);
 
   if (errcode) {
     llvm::errs() << "Could not open file: " << errcode.message();
-    exit(1);
+    std::terminate();
   }
 
   llvm::legacy::PassManager pass;
@@ -74,7 +77,7 @@ void compile(llvm::Module &module) {
 
   if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType)) {
     llvm::errs() << "TargetMachine can't emit a file of this type";
-    exit(1);
+    std::terminate();
   }
 
   pass.run(module);
@@ -82,9 +85,9 @@ void compile(llvm::Module &module) {
 }
 
 void compile(std::string_view filename) {
-  auto ctx = pt::Context::Create();
+  auto parsetree = pt::Context::Create();
 
-  Visitor visitor(ctx.get());
+  Visitor visitor(parsetree.get());
   std::ifstream inf(filename.data());
   antlr4::ANTLRInputStream input(inf);
 
@@ -114,7 +117,7 @@ void compile(std::string_view filename) {
     // spdlog::info("parsed: {}", tree->toStringTree(&parser, true));
   } catch (antlr4::ParseCancellationException &e) {
     std::cout << e.what() << std::endl;
-    exit(1);
+    std::terminate();
   }
 
   // interpreter.setParser(&parser);
@@ -129,11 +132,13 @@ void compile(std::string_view filename) {
   //   llvm::outs() << "\n";
   // }
 
-  auto ctxVal = pt::Context::validate(std::move(ctx));
+  sema::Sema anal(*parsetree);
+
+  Ptr<ast::Context> ast = anal.finish();
 
   Compiler compiler;
 
-  compiler.compile(*ctxVal->modules.front());
+  compiler.compile(*ast->_modules.front());
 
   compile(compiler._mod);
 }

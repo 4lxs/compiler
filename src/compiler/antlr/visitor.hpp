@@ -32,6 +32,12 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitAnonStruct(parser::XParser::AnonStructContext *ctx) override;
 
+  std::any visitStmt(parser::XParser::StmtContext *ctx) override;
+
+  std::any visitIf_(parser::XParser::If_Context *ctx) override;
+
+  std::any visitBlock(parser::XParser::BlockContext *ctx) override;
+
  private:
   [[nodiscard]]
   std::vector<pt::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
@@ -61,6 +67,7 @@ class Visitor : public parser::XBaseVisitor {
 
     pt::Expr pop();
     std::vector<pt::Expr> pop(size_t cnt);
+    [[nodiscard]] auto size() const { return _stack.size(); }
 
    private:
     // stack for storing values. std::any doesn't allow non-copyable types

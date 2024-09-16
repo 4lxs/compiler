@@ -1,65 +1,33 @@
 #pragma once
 
-#include <x/common.h>
-
+#include <optional>
 #include <variant>
 #include <vector>
 
+#include "x/ast/ast.hpp"
+#include "x/common.hpp"
+#include "x/pt/block.hpp"
+#include "x/pt/pt.hpp"
+#include "x/sema/sema.hpp"
+
 namespace x::pt {
 
-class PrimaryExpr {
- public:
-  enum class Type {
-    Int,
-    String,
-    Bool,
-  };
-
-  static Ptr<PrimaryExpr> Bool(bool isTrue);
-
-  static Ptr<PrimaryExpr> Int(std::string val) {
-    return Ptr<PrimaryExpr>(new PrimaryExpr(std::move(val), Type::Int));
-  };
-
-  // private:
-  // PrimaryExpr(std::string val, Type type)
-  //     : _val{std::move(val)}, _type{type} {};
-
+struct IntegerE {
   std::string _val;
-  Type _type;
 };
 
-class IfExpr {};
+struct BoolE {
+  bool _val;
+};
 
-class ParenExpr;
-class BinaryExpr;
-class StructExpr;
+struct StringE {
+  std::string _val;
+};
 
-class Expr {
- public:
-  template <typename T>
-  auto accept(T const &consumer) const {
-    return std::visit(consumer, _val);
-  };
-
-  template <typename T>
-  [[nodiscard]] auto is() const -> bool {
-    return std::holds_alternative<T>(_val);
-  }
-
-  template <typename T>
-  [[nodiscard]] auto to() const -> Ptr<T> & {
-    return *std::get<Ptr<T>>(_val);
-  }
-
-  template <typename T>
-  [[nodiscard]] auto into() -> Ptr<T> {
-    return std::move(std::get<Ptr<T>>(_val));
-  }
-
-  std::variant<Ptr<PrimaryExpr>, Ptr<IfExpr>, Ptr<BinaryExpr>, Ptr<ParenExpr>,
-               Ptr<StructExpr>>
-      _val;
+struct IfExpr {
+  pt::Expr cond;
+  Ptr<Block> then;
+  Ptr<Block> else_;
 };
 
 class BinaryExpr {
@@ -83,6 +51,12 @@ class ParenExpr {
   Expr inner;
 };
 
+class Call {
+ public:
+  Fn *fn;
+  Ptr<StructExpr> args;
+};
+
 struct Field {
   std::string name;
   Expr value;
@@ -90,9 +64,7 @@ struct Field {
 
 class StructExpr {
  public:
-  static std::unique_ptr<StructExpr> Create(std::vector<Field> &&fields) {
-    return std::make_unique<StructExpr>(std::move(fields));
-  };
+  static std::unique_ptr<StructExpr> Create(std::vector<Field> &&fields);
 
   std::vector<Field> fields;
 };

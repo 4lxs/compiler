@@ -5,7 +5,12 @@
 #include <ranges>
 
 #include "XParser.h"
+#include "spdlog/spdlog.h"
+#include "x/ast/expr.hpp"
+#include "x/ast/stmt.hpp"
+#include "x/ast/toplevel.hpp"
 #include "x/pt/expr.hpp"
+#include "x/pt/module.hpp"
 
 namespace x {
 
@@ -27,20 +32,18 @@ std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
 }
 
 std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
-  std::string name = ctx->name->getText();
+  pt::Type* retType =
+      ctx->ret != nullptr ? get_stub(ctx->ret)->use_type() : nullptr;
 
-  pt::Stub* retStub = ctx->ret != nullptr ? get_stub(ctx->ret) : nullptr;
+  pt::FnProto prototype{parse_params(ctx->params()), retType};
 
-  pt::FnProto prototype{std::move(name), parse_params(ctx->params()), retStub};
-
-  auto func = std::make_unique<pt::Fn>(_module, std::move(prototype));
-
-  _block = func.get();
-
-  pt::Stub* stub = _module->get_stub(std::string{func->name()});
-  stub->define_function(std::move(func));
+  pt::Stub* stub = _module->get_stub(ctx->name->getText());
 
   visitBlock(ctx->block());
+
+  stub->function(std::move(prototype),
+                 std::move(std::get<Ptr<pt::Block>>(_stack.pop())));
+
   return {};
 }
 
@@ -49,7 +52,7 @@ std::any Visitor::visitReturn(parser::XParser::ReturnContext* ctx) {
 
   auto* retVal = ctx->expr();
   if (retVal == nullptr) {
-    _block->ret();
+    _block->ret(std::nullopt);
   } else {
     visit(retVal);
 
@@ -64,15 +67,16 @@ std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
 
   assert(_block != nullptr);
 
-  pt::Expr expr = _stack.pop();
+  Ptr<pt::StructExpr> args = std::get<Ptr<pt::StructExpr>>(_stack.pop());
+  pt::Fn* func = get_stub(ctx->fn)->function(*args);
 
-  _block->call(get_stub(ctx->fn), expr.into<pt::StructExpr>());
+  _stack.push(std::make_unique<pt::Call>(func, std::move(args)));
 
   return {};
 }
 
 std::any Visitor::visitIntPE(parser::XParser::IntPEContext* ctx) {
-  _stack.push(pt::PrimaryExpr::Int(ctx->getText()));
+  _stack.push(std::make_unique<pt::IntegerE>(ctx->getText()));
 
   return {};
 }
@@ -132,6 +136,60 @@ std::any Visitor::visitAnonStruct(parser::XParser::AnonStructContext* ctx) {
   return {};
 }
 
+std::any Visitor::visitStmt(parser::XParser::StmtContext* ctx) {
+  visitChildren(ctx);
+
+  if (_stack.size() > 0) {
+    _block->expr(_stack.pop());
+  }
+
+  assert(_stack.size() == 0);
+
+  return {};
+}
+
+std::any Visitor::visitIf_(parser::XParser::If_Context* ctx) {
+  visit(ctx->expr());
+
+  pt::Expr cond = _stack.pop();
+
+  visitBlock(ctx->then);
+
+  Ptr<pt::Block> then = std::get<Ptr<pt::Block>>(_stack.pop());
+
+  Ptr<pt::Block> else_;
+
+  if (ctx->else_ != nullptr) {
+    visitBlock(ctx->else_);
+
+    else_ = std::get<Ptr<pt::Block>>(_stack.pop());
+  }
+
+  _stack.push(std::make_unique<pt::IfExpr>(std::move(cond), std::move(then),
+                                           std::move(else_)));
+
+  return {};
+}
+
+std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
+  pt::Block* oldblock = _block;
+
+  auto block = std::make_unique<pt::Block>();
+  _block = block.get();
+
+  visitChildren(ctx);
+
+  if (ctx->terminator != nullptr) {
+    block->setTerminator(_stack.pop());
+  }
+
+  _block = oldblock;
+
+  _stack.push(std::move(block));
+
+  return {};
+}
+
 std::vector<pt::FnParam> Visitor::parse_params(
     parser::XParser::ParamsContext* ctx) {
   auto names = ctx->Ident();
@@ -141,7 +199,7 @@ std::vector<pt::FnParam> Visitor::parse_params(
   std::vector<pt::FnParam> params;
   params.reserve(names.size());
   for (auto&& [name, type] : std::views::zip(names, types)) {
-    params.emplace_back(name->getText(), get_stub(type));
+    params.emplace_back(name->getText(), get_stub(type)->use_type());
   }
 
   return params;

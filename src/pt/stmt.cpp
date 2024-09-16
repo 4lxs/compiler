@@ -2,62 +2,17 @@
 
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "x/pt/block.hpp"
 #include "x/pt/module.hpp"
 
 namespace x::pt {
 
-Ptr<RetStmtV> RetStmt::validate() {
-  return std::make_unique<RetStmtV>(std::move(_retVal));
-}
+RetStmt::RetStmt(std::optional<Expr> val) : _retVal{std::move(val)} {};
 
-//============================//
+Fn::Fn(FnProto&& proto, Ptr<Block> body, Stub* stub)
+    : _body{std::move(body)}, _proto{std::move(proto)}, _stub{stub} {};
 
-StmtV Stmt::validate() {
-  return std::visit([](auto &&stmt) { return StmtV{stmt->validate()}; },
-                    std::move(_stmt));
-}
-
-//============================//
-
-Ptr<CallV> Call::validate() {
-  return std::make_unique<CallV>(fn->validate<Fn>()->validate(),
-                                 std::move(args));
-}
-
-//============================//
-
-Fn::Fn(Module *mod, FnProto &&proto) : Block{mod}, _proto{std::move(proto)} {
-  for (const auto &[_, arg] : proto.params) {
-    arg->use_type();
-  }
-};
-
-std::string_view Fn::name() const { return _proto.name; }
-
-FnV *Fn::validate() {
-  if (_val != nullptr) {
-    return _val.get();
-  }
-  spdlog::info("validating function {}", name());
-
-  std::vector<FnV::Param> params;
-  params.reserve(_proto.params.size());
-
-  for (auto &&[name, type] : _proto.params) {
-    params.push_back(FnV::Param(std::move(name), type->validate<Type>()));
-  }
-
-  Block::validate();
-
-  Type *ret = _proto.ret != nullptr ? _proto.ret->validate<Type>() : nullptr;
-
-  _val = std::make_unique<FnV>(std::move(_proto.name), std::move(params),
-                               std::move(Block::_val), ret);
-
-  return _val.get();
-}
+std::string const& Fn::name() const { return _stub->name(); }
 
 }  // namespace x::pt

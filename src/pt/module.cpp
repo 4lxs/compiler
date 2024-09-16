@@ -4,110 +4,112 @@
 #include <variant>
 
 #include "spdlog/spdlog.h"
-#include "x/common.h"
+#include "x/ast/expr.hpp"
+#include "x/ast/module.hpp"
+#include "x/ast/stmt.hpp"
+#include "x/ast/toplevel.hpp"
+#include "x/ast/type.hpp"
+#include "x/common.hpp"
 #include "x/pt/context.hpp"
+#include "x/pt/type.hpp"
 
 namespace x::pt {
 
 Stub *Module::get_stub(std::string &&local_name) {
-  spdlog::info("getting stub: local={}", local_name);
-  return get_stub(/* *_path + */ Path({std::move(local_name)}, false));
+  auto [itr, inserted] = _items.insert(
+      {std::string{local_name},
+       std::unique_ptr<Stub>(new Stub(std::move(local_name), this))});
+  if (!inserted) {
+    spdlog::info("item already defined");
+  }
+
+  return itr->second.get();
 }
 
 Stub *Module::get_stub(Path &&path) {
-  // return _ctx->stub(std::move(path));
-
-  spdlog::info("getting stub: {}", format_as(path));
-  Path *stubPath = _ctx->get_or_insert_path(std::move(path));
-
-  auto [it, inserted] =
-      _items.insert({stubPath, std::unique_ptr<Stub>(new Stub(stubPath))});
-
-  return it->second.get();
+  if (path._components.size() == 1) {
+    return get_stub(std::move(path._components.front()));
+  }
+  return _ctx->stub(std::move(path));
 }
 
-Module::Module(Context *ctx, Path *path) : _path{path}, _ctx{ctx} {
-  // spdlog::info("module {}", *path);
-
-  get_stub(Path({"I32"}, false))
-      ->define_type(std::make_unique<Type>(Type::Kind::Integer));
-}
-
-auto Module::validate() -> Ptr<Val> {
-  auto val = std::make_unique<Val>();
-
-  // first validate all stubs. don't take out the value until all stubs have
-  // been validated. that is to allow stubs to cross-link. e.g. fn val stub
-  // needs pointer to return type stub
-
-  for (auto &[_, stub] : _items) {
-    spdlog::info("validating: {}", format_as(*stub->_path));
-    stub->validate();
-  }
-
-  for (auto &[_, stub] : _items) {
-    spdlog::info("adding: {}", format_as(*stub->_path));
-    std::visit(overloaded{[&val = *val](Ptr<Fn> item) {
-                            spdlog::info("adding function: {}",
-                                         fmt::ptr(item->_val.get()));
-                            val._functions.push_back(std::move(item->_val));
-                          },
-                          [&val = *val](Ptr<Type> item) {
-                            val._types.push_back(std::move(item->_val));
-                          },
-                          [](std::monostate) {
-                            spdlog::error("undefined item");
-                            std::terminate();
-                          }
-
-               },
-               std::move(stub->_holder));
-  }
-
-  return std::move(val);
+Module::Module(Context *ctx) : _ctx{ctx}, _path{{} /* updated by context */} {
+  get_stub("I32")->define_type(std::make_unique<Type>(Type::Kind::Number));
 }
 
 //===============
 //= Stub
 //===============
 
-void Stub::validate() {
+Fn *Stub::function(StructExpr const & /*params*/) {
+  Fn *ret{};
+
   if (_holder.index() == 0) {
-    spdlog::error("validating undefined stub");
+    auto func =
+        std::make_unique<Fn>(FnProto(), std::make_unique<Block>(), this);
+    ret = func.get();
+    _holder = std::move(func);
+  } else if (auto *func = std::get_if<Ptr<Fn>>(&_holder)) {
+    ret = func->get();
+  } else {
+    spdlog::error("different definitions of stub");
     std::terminate();
   }
 
-  spdlog::info("validating children");
-
-  std::visit(
-      overloaded{[](std::monostate) {}, [](auto &val) { val->validate(); }},
-      _holder);
-
-  // TODO: make sure all usages are good
+  return ret;
 }
 
-void Stub::define_function(Ptr<Fn> func) {
-  spdlog::info("defining function {} at {}", func->name(), format_as(*_path));
+Fn *Stub::function(FnProto &&proto, Ptr<Block> body) {
+  spdlog::info("defining function {}", _name);
   if (_holder.index() != 0) {
-    spdlog::error("double definition of stub {}", format_as(*_path));
     std::terminate();
   }
 
-  _holder = std::move(func);
+  Fn *ret{};
+
+  if (_holder.index() == 0) {
+    auto func = std::make_unique<Fn>(std::move(proto), std::move(body), this);
+    ret = func.get();
+    _holder = std::move(func);
+  } else if (auto *func = std::get_if<Ptr<Fn>>(&_holder)) {
+    ret = func->get();
+  } else {
+    spdlog::error("different definitions of stub");
+    std::terminate();
+  }
+
+  return ret;
 }
 
-void Stub::use_type() {}
+Type *Stub::use_type() {
+  Type *ret{};
+
+  if (_holder.index() == 0) {
+    auto type = std::make_unique<Type>(Type::Kind::Number);
+    ret = type.get();
+    _holder = std::move(type);
+  } else if (auto *type = std::get_if<Ptr<Type>>(&_holder)) {
+    ret = type->get();
+  } else {
+    spdlog::error("different definitions of stub");
+    std::terminate();
+  }
+
+  return ret;
+}
 
 void Stub::define_type(Ptr<Type> type) {
-  spdlog::info("defining type at {}", format_as(*_path));
+  spdlog::info("defining type {}", _name);
   if (_holder.index() != 0) {
-    spdlog::error("double definition of stub {}", format_as(*_path));
     std::terminate();
   }
 
   _holder = std::move(type);
 }
 
-Stub::Stub(Path *path) : _path{path} {}
+Stub::Stub(std::string &&name, Module *module)
+    : _module{module}, _name{std::move(name)} {
+  assert(module != nullptr);
+}
 
 }  // namespace x::pt

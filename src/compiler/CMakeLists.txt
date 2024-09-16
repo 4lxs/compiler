@@ -205,6 +205,7 @@ target_link_libraries(
           ${llvm_libs}
           parser
           pt
+          sema
           myproject::myproject_options
           myproject::myproject_warnings)
 

@@ -23,7 +23,7 @@ staticDef
     ;
 
 varDef
-    : Let name=Ident Cln path (Eq val=expr)? Sc
+    : name=Ident Cln type=path? (Eq val=expr)?
     ;
 
 typeDef
@@ -38,7 +38,7 @@ params
     : LPrn (Ident Cln path (Cma Ident Cln path)*)? RPrn;
 
 block
-    : LBc stmt* expr? RBc
+    : LBc stmt* terminator=expr? RBc
     ;
 
 stmt
@@ -56,7 +56,7 @@ return
     ;
 
 if_
-    : If expr block (Else block)?
+    : If expr then=block (Else else_=block)?
     ;
 
 expr
@@ -87,6 +87,8 @@ path: initSep=ClnCln? (Ident ClnCln)* Ident;
 //===
 // Lexer
 //===
+
+fragment BlEnd: Sc Sc;
 
 Comment: '//' .*? Eol -> skip;
 

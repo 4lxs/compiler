@@ -1,23 +1,14 @@
 include(GenerateExportHeader)
 
-set(NAME pt)
+set(NAME sema)
 
-add_library(
-  ${NAME}
-  block.cpp
-  context.cpp
-  expr.cpp
-  module.cpp
-  stmt.cpp
-  type.cpp)
+add_library(${NAME} sema.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 
 target_link_libraries(
-  ${NAME}
-  PRIVATE fmt::fmt spdlog::spdlog
-          # myproject_options
-          # myproject_warnings
+  ${NAME} PRIVATE fmt::fmt spdlog::spdlog myproject_options
+                  # myproject_warnings
 )
 
 target_include_directories(
