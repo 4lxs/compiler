@@ -5,9 +5,7 @@
 
 #include "spdlog/spdlog.h"
 #include "x/ast/expr.hpp"
-#include "x/ast/module.hpp"
 #include "x/ast/stmt.hpp"
-#include "x/ast/toplevel.hpp"
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
 #include "x/pt/context.hpp"
@@ -33,7 +31,7 @@ Stub *Module::get_stub(Path &&path) {
   return _ctx->stub(std::move(path));
 }
 
-Module::Module(Context *ctx) : _ctx{ctx}, _path{{} /* updated by context */} {
+Module::Module(Context *ctx) : _path{{} /* updated by context */}, _ctx{ctx} {
   get_stub("I32")->define_type(std::make_unique<Type>(Type::Kind::Number));
 }
 

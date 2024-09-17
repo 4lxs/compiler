@@ -32,6 +32,8 @@ function(myproject_setup_dependencies)
     cpmaddpackage("gh:CLIUtils/CLI11@2.3.2")
   endif()
 
+  cpmaddpackage("gh:microsoft/GSL@4.0.0")
+
 endfunction()
 
 # setup llvm for the project

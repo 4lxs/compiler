@@ -8,7 +8,6 @@
 #include "spdlog/spdlog.h"
 #include "x/ast/expr.hpp"
 #include "x/ast/stmt.hpp"
-#include "x/ast/toplevel.hpp"
 #include "x/pt/expr.hpp"
 #include "x/pt/module.hpp"
 

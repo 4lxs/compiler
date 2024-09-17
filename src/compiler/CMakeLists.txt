@@ -199,15 +199,11 @@ add_llvm_libs(
 
 target_link_libraries(
   ${NAME}
-  PRIVATE CLI11::CLI11
-          fmt::fmt
-          spdlog::spdlog
+  PRIVATE libs
           ${llvm_libs}
           parser
           pt
-          sema
-          myproject::myproject_options
-          myproject::myproject_warnings)
+          sema)
 
 target_include_directories(
   ${NAME} PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")

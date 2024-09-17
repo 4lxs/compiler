@@ -138,7 +138,7 @@ void compile(std::string_view filename) {
 
   Compiler compiler;
 
-  compiler.compile(*ast->_modules.front());
+  compiler.compile(*ast);
 
   compile(compiler._mod);
 }

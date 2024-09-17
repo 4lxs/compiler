@@ -6,10 +6,7 @@ add_library(${NAME} sema.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 
-target_link_libraries(
-  ${NAME} PRIVATE fmt::fmt spdlog::spdlog myproject_options
-                  # myproject_warnings
-)
+target_link_libraries(${NAME} PRIVATE libs)
 
 target_include_directories(
   ${NAME} ${WARNING_GUARD}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "x/ast/ast.hpp"
+#include "x/ast/fwd_decl.hpp"
 #include "x/common.hpp"
 
 namespace x::pt {

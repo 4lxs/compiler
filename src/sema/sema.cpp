@@ -5,9 +5,7 @@
 
 #include "x/ast/context.hpp"
 #include "x/ast/expr.hpp"
-#include "x/ast/module.hpp"
 #include "x/ast/stmt.hpp"
-#include "x/ast/toplevel.hpp"
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
 #include "x/pt/context.hpp"
@@ -22,17 +20,9 @@ Sema::Sema(pt::Context const &ctx) {
   }
 }
 
-Ptr<ast::Context> Sema::finish() {
-  auto ast = std::make_unique<ast::Context>();
-
-  ast->_modules = std::move(_modules);
-
-  return std::move(ast);
-}
+Ptr<ast::Context> Sema::finish() { return std::move(_ast); }
 
 void Sema::add(pt::Module const &module) {
-  auto mod = std::make_unique<ast::Module>();
-
   // first validate all stubs.  that is to allow stubs to cross-link. e.g. fn
   // val stub needs pointer to return type stub
 
@@ -43,27 +33,23 @@ void Sema::add(pt::Module const &module) {
       std::terminate();
     }
 
-    std::visit(
-        overloaded{
-            [](std::monostate) {
-              spdlog::error("undefined item");
-              std::terminate();
-            },
-            [&, this](Ptr<pt::Fn> const &func) {
-              std::unique_ptr<ast::Fn> funcptr(new ast::Fn{.pt = func.get()});
-              auto *newtype = funcptr.get();
-              mod->_functions.push_back(std::move(funcptr));
-              _fnMap.insert({func.get(), newtype});
-            },
-            [&, this](Ptr<pt::Type> const &type) {
-              std::unique_ptr<ast::Type> typeptr(
-                  new ast::Type{.pt = type.get()});
-              auto *newtype = typeptr.get();
-              mod->_types.push_back(std::move(typeptr));
-              _typeMap.insert({type.get(), newtype});
-            },
-        },
-        stub->_holder);
+    std::visit(overloaded{
+                   [](std::monostate) {
+                     spdlog::error("undefined item");
+                     std::terminate();
+                   },
+                   [&, this](Ptr<pt::Fn> const &func) {
+                     ast::Fn *newfn = ast::Fn::Allocate(*_ast);
+                     _ast->_functions.push_back(newfn);
+                     _maps.insert(func.get(), newfn);
+                   },
+                   [&, this](Ptr<pt::Type> const &type) {
+                     ast::Type *newtype = ast::Type::Allocate(*_ast);
+                     _ast->_types.push_back(newtype);
+                     _maps.insert(type.get(), newtype);
+                   },
+               },
+               stub->_holder);
   }
 
   for (auto const &[_, stub] : module._items) {
@@ -74,87 +60,114 @@ void Sema::add(pt::Module const &module) {
                },
                stub->_holder);
   }
-
-  _modules.push_back(std::move(mod));
 }
 
-Ptr<ast::BlockE> Sema::check(pt::Block &block) {
-  auto ret = std::make_unique<ast::BlockE>();
-
+ast::Block *Sema::check(pt::Block &block) {
+  std::vector<ast::Stmt *> body;
   for (pt::Stmt &stmt : block._body) {
-    ast::Stmt newStmt = stmt.accept(overloaded{
-        [this](auto &stmt) { return ast::Stmt(check(stmt)); },
+    stmt.accept(overloaded{
+        [this, &body](auto &stmt) {
+          body.push_back(static_cast<ast::Stmt *>(check(stmt)));
+        },
     });
-
-    ret->body.push_back(std::move(newStmt));
   }
 
+  ast::Expr *terminator = nullptr;
   if (block._end.has_value()) {
-    ret->terminator = std::move(check(block._end.value()));
+    terminator = check(block._end.value());
   }
 
-  return std::move(ret);
+  return ast::Block::Create(*_ast, std::move(body), terminator);
 }
 
-Ptr<ast::StructE> Sema::check(pt::StructExpr &expr) {
-  std::vector<ast::Expr> fields;
+ast::StructLiteral *Sema::check(pt::StructExpr &expr) {
+  std::vector<ast::Expr *> fields;
+  fields.reserve(expr.fields.size());
 
   for (auto &[_, value] : expr.fields) {
     fields.push_back(check(value));
   }
 
-  return std::make_unique<ast::StructE>(std::move(fields));
+  return ast::StructLiteral::Create(*_ast, std::move(fields));
 }
 
 ast::Type *Sema::check(pt::Type *type) {
   if (type == nullptr) {
-    return _voidType.get();
+    return _voidType;
   }
 
-  return _typeMap.at(type);
+  auto [astType, wasInitialized] = _maps.get(type, true);
+  if (wasInitialized) {
+    return astType;
+  }
+
+  astType->Create(ast::Type::Kind::I32);
+
+  return astType;
 }
 
-Ptr<ast::Ret> Sema::check(Ptr<pt::RetStmt> &stmt) {
-  std::optional<ast::Expr> retVal;
+ast::Return *Sema::check(Ptr<pt::RetStmt> &stmt) {
+  ast::Expr *retVal = nullptr;
   if (stmt->_retVal.has_value()) {
     retVal = check(stmt->_retVal.value());
   }
 
-  return std::make_unique<ast::Ret>(std::move(retVal));
+  return ast::Return::Create(*_ast, retVal);
 }
 
-ast::Expr Sema::check(pt::Expr &expr, pt::Type *type) {
+ast::Expr *Sema::check(pt::Expr &expr, pt::Type *type) {
   return std::visit(
       overloaded{
-          [](Ptr<pt::IntegerE> const &expr) {
-            return ast::Expr(ast::IntegerE::Int32(expr->_val));
+          [this](Ptr<pt::IntegerE> const &expr) -> ast::Expr * {
+            return ast::IntegerLiteral::Int32(*_ast, expr->_val);
           },
-          [this](Ptr<pt::Call> const &expr) {
-            return ast::Expr(std::make_unique<ast::CallE>(check(expr->fn),
-                                                          check(*expr->args)));
+          [this](Ptr<pt::Call> const &expr) -> ast::Expr * {
+            return ast::FnCall::Create(*_ast, check(expr->fn),
+                                       check(*expr->args));
           },
-          [this](Ptr<pt::IfExpr> const &expr) {
-            return ast::Expr(std::make_unique<ast::IfE>(
-                check(expr->cond), check(*expr->then),
-                expr->else_ != nullptr ? check(*expr->else_) : nullptr));
+          [this](Ptr<pt::IfExpr> const &expr) -> ast::Expr * {
+            return ast::If::Create(
+                *_ast, check(expr->cond), check(*expr->then),
+                expr->else_ != nullptr ? check(*expr->else_) : nullptr);
           },
-          [](auto const & /*expr*/) -> ast::Expr { assert(false); },
+          [this](Ptr<pt::BinaryExpr> const &expr) -> ast::Expr * {
+            ast::Expr *lhs = check(expr->l);
+            ast::Expr *rhs = check(expr->r);
+            switch (expr->op) {
+              case pt::BinaryExpr::Operator::Plus:
+                return ast::Builtin::Create(*_ast, ast::Builtin::Op::iAdd,
+                                            std::vector{lhs, rhs});
+              case pt::BinaryExpr::Operator::Minus:
+              case pt::BinaryExpr::Operator::Star:
+              case pt::BinaryExpr::Operator::Slash:
+              case pt::BinaryExpr::Operator::Greater:
+                assert(false);
+              case pt::BinaryExpr::Operator::Less:
+                return ast::Builtin::Create(*_ast, ast::Builtin::Op::iLess,
+                                            std::vector{lhs, rhs});
+            }
+          },
+          [](auto const & /*expr*/) -> ast::Expr * { assert(false); },
       },
       expr);
 }
 
 ast::Fn *Sema::check(pt::Fn *func) {
-  ast::Fn *val = _fnMap.at(func);
-  val->params.reserve(func->_proto.params.size());
+  auto [astFn, wasInitialized] = _maps.get(func, true);
+  if (wasInitialized) {
+    return astFn;
+  }
+
+  std::vector<ast::Fn::Param> params;
+  params.reserve(func->_proto.params.size());
 
   for (auto const &[_, type] : func->_proto.params) {
-    val->params.push_back(ast::Fn::Param(check(type)));
+    params.push_back(ast::Fn::Param(func->name(), check(type)));
   }
-  val->ret = check(func->_proto.ret);
+  astFn->Create(func->name(), std::move(params), check(*func->_body),
+                check(func->_proto.ret));
 
-  val->block = check(*func->_body);
-
-  return val;
+  return astFn;
 }
 
 // ast::BlockE *Block::validate() {

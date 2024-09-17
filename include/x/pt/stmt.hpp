@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "pt.hpp"
-#include "x/ast/ast.hpp"
+#include "x/ast/fwd_decl.hpp"
 #include "x/pt/block.hpp"
 #include "x/pt/expr.hpp"
 

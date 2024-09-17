@@ -5,9 +5,7 @@
 #include <spdlog/spdlog.h>
 
 #include "x/ast/expr.hpp"
-#include "x/ast/module.hpp"
 #include "x/ast/stmt.hpp"
-#include "x/ast/toplevel.hpp"
 #include "x/ast/type.hpp"
 #include "x/pt/module.hpp"
 
@@ -49,7 +47,7 @@ Stub *Context::stub(Path &&path) {
 Path::Path(std::vector<std::string> &&components, bool external)
     : _externalPath(external), _components{std::move(components)} {}
 
-std::string format_as(const Path &path) {
+std::string format_as(Path const &path) {
   return fmt::format("{}{}", path._externalPath ? "::" : "",
                      fmt::join(path._components, "::"));
 }

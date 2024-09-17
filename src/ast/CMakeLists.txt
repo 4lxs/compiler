@@ -1,15 +1,8 @@
 include(GenerateExportHeader)
 
-set(NAME pt)
+set(NAME ast)
 
-add_library(
-  ${NAME}
-  block.cpp
-  context.cpp
-  expr.cpp
-  module.cpp
-  stmt.cpp
-  type.cpp)
+add_library(${NAME} stmt.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 
@@ -26,8 +19,9 @@ set_target_properties(
              CXX_VISIBILITY_PRESET hidden
              VISIBILITY_INLINES_HIDDEN YES)
 
-generate_export_header(${NAME} EXPORT_FILE_NAME
-                       ${PROJECT_BINARY_DIR}/include/myproject/pt_export.hpp)
+generate_export_header(
+  ${NAME} EXPORT_FILE_NAME
+  ${PROJECT_BINARY_DIR}/include/myproject/${NAME}_export.hpp)
 
 if(NOT BUILD_SHARED_LIBS)
   target_compile_definitions(${NAME} PUBLIC SAMPLE_LIBRARY_STATIC_DEFINE)

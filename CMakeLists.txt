@@ -26,8 +26,14 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 target_compile_features(myproject_options
                         INTERFACE cxx_std_${CMAKE_CXX_STANDARD})
 
-add_library(myproject::myproject_options ALIAS myproject_options)
-add_library(myproject::myproject_warnings ALIAS myproject_warnings)
+add_library(libs INTERFACE)
+target_link_libraries(
+  libs
+  INTERFACE fmt::fmt
+            spdlog::spdlog
+            Microsoft.GSL::GSL
+            myproject_options
+            myproject_warnings)
 
 add_subdirectory(configured_files)
 
