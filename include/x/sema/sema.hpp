@@ -7,6 +7,7 @@
 #include "x/ast/stmt.hpp"
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
+#include "x/pt/context.hpp"
 #include "x/pt/pt.hpp"
 #include "x/pt/type.hpp"
 
@@ -21,7 +22,7 @@ namespace x::sema {
 class Sema {
  public:
   /// @param ctx the initial parse tree
-  explicit Sema(pt::Context const& ctx);
+  explicit Sema(pt::Context* ctx);
 
   Ptr<ast::Context> finish();
 
@@ -29,7 +30,7 @@ class Sema {
   ast::Fn* check(pt::Fn* func);
   ast::Type* check(pt::Type* type);
   ast::Return* check(Ptr<pt::RetStmt>& stmt);
-  ast::Expr* check(pt::Expr& expr, pt::Type* type = nullptr);
+  not_null<ast::Expr*> check(pt::Expr& expr);
 
   ast::Block* check(pt::Block& block);
   ast::StructLiteral* check(pt::StructExpr& expr);
@@ -37,6 +38,7 @@ class Sema {
   void add(pt::Module const& module);
 
   Ptr<ast::Context> _ast = std::make_unique<ast::Context>();
+  pt::Context* _pt;
 
   /// maps parse tree types to ast types
   /// note that ast types are allocated in ast::Context and always guaranteed to
@@ -50,6 +52,14 @@ class Sema {
     std::map<pt::Fn*, ast::Fn*> _fnMap;
 
    public:
+    explicit Mappings(std::map<pt::Type*, ast::Type*> typeMap)
+        : _typeMap(std::move(typeMap)) {
+      for (auto& [_, ast] : _typeMap) {
+        spdlog::info("initializing {}", fmt::ptr(ast));
+        ast = initialized(ast);
+      }
+    }
+
     template <typename T>
     struct Return {
       T* astValue;
@@ -80,29 +90,39 @@ class Sema {
                         bool init) {
       auto itr = map.find(type);
       assert(itr != map.end());
-      bool initialized = (uintptr_t(itr->second) & uintptr_t(1)) != 0;
+      bool isInitialized = is_init(itr->second);
       if (init) {
-        itr->second =
-            reinterpret_cast<AstType*>(uintptr_t(itr->second) | uintptr_t(1));
+        itr->second = initialized(itr->second);
       }
       return Return<AstType>{
-          .astValue = reinterpret_cast<AstType*>(uintptr_t(itr->second) &
-                                                 ~uintptr_t(1)),
-          .wasInitialized = initialized,
+          .astValue = get_ptr(itr->second),
+          .wasInitialized = isInitialized,
       };
     }
 
     template <typename PtType, typename AstType>
     void set(std::map<PtType*, AstType*>& map, PtType* pt, AstType* ast,
              bool init) {
-      map.insert(
-          {pt, init ? reinterpret_cast<AstType*>(uintptr_t(ast) | uintptr_t(1))
-                    : ast});
+      map.insert({pt, init ? initialized(ast) : ast});
     }
-  } _maps;
 
-  ast::Type* _voidType = ast::Type::Create(*_ast, ast::Type::Kind::Void);
-  ast::Fn* _builtinAddInt = ast::Fn::Create(*_ast, );
+    template <typename T>
+    constexpr T* initialized(T* ptr) {
+      return reinterpret_cast<T*>(uintptr_t(ptr) | uintptr_t(1));
+    }
+
+    template <typename T>
+    constexpr T* get_ptr(T* ptr) {
+      return reinterpret_cast<T*>(uintptr_t(ptr) & ~uintptr_t(1));
+    }
+
+    bool is_init(void* ptr) { return (uintptr_t(ptr) & uintptr_t(1)) != 0; }
+  };
+  Mappings _maps{std::map<pt::Type*, ast::Type*>{
+      {_pt->_strTy.get(), _ast->_strTy},
+      {_pt->_numTy.get(), _ast->_int32Ty},
+      {_pt->_boolTy.get(), _ast->_boolTy},
+  }};
 };
 
 }  // namespace x::sema

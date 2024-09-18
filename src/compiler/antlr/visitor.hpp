@@ -38,6 +38,8 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitBlock(parser::XParser::BlockContext *ctx) override;
 
+  // std::any visitVarDef(parser::XParser::VarDefContext *ctx) override;
+
  private:
   [[nodiscard]]
   std::vector<pt::FnParam> parse_params(parser::XParser::ParamsContext *ctx);

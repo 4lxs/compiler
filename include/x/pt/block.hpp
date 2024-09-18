@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "pt.hpp"
-#include "x/sema/sema.hpp"
+#include "x/sema/fwd_decl.hpp"
 
 namespace x::pt {
 

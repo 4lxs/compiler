@@ -1,14 +1,10 @@
 #pragma once
 
-#include <optional>
-#include <variant>
 #include <vector>
 
-#include "x/ast/fwd_decl.hpp"
 #include "x/common.hpp"
 #include "x/pt/block.hpp"
 #include "x/pt/pt.hpp"
-#include "x/sema/sema.hpp"
 
 namespace x::pt {
 

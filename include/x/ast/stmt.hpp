@@ -15,7 +15,7 @@ class Stmt {
     SK_Function,
     SK_Builtin,
 
-    SK_ExprBegin,
+    SK_Expr,
     SK_Int,
     SK_Bool,
     SK_String,
@@ -38,10 +38,11 @@ class Stmt {
 class Return : public Stmt, public AllowAlloc<Context, Return> {
   friend AllowAlloc;
 
- public:  // TODO: temp
-  explicit Return(Expr* val = nullptr) : Stmt(SK_Return), _val(val) {};
+ public:
+  not_null<Expr*> _val;
 
-  Expr* _val;
+ private:
+  explicit Return(not_null<Expr*> val) : Stmt(SK_Return), _val(val) {};
 
  public:
   static bool classof(Stmt const* expr) {

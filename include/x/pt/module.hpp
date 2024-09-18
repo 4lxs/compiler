@@ -10,13 +10,9 @@
 #include "x/pt/path.hpp"
 #include "x/pt/pt.hpp"
 #include "x/pt/stmt.hpp"
-#include "x/sema/sema.hpp"
+#include "x/sema/fwd_decl.hpp"
 
 namespace x::pt {
-
-class Context;
-
-class Stub;
 
 class Module {
  public:
@@ -39,6 +35,7 @@ class Module {
   /// holds all items in this module. e.g. fn, var, type...
   std::map<std::string, Ptr<Stub>> _items;
 
+ public:
   Context *_ctx;
 };
 
@@ -58,7 +55,7 @@ class Stub {
   /// use the stub as a type
   Type *use_type();
 
-  void define_type(Ptr<Type> type);
+  void define_type(Type *type);
 
   [[nodiscard]] std::string const &name() const { return _name; };
 
@@ -78,7 +75,7 @@ class Stub {
   /// definition has not been provided yet.
   ///
   /// guaranteed to be valid only after a validate call
-  using Holder = std::variant<std::monostate, Ptr<Fn>, Ptr<Type>>;
+  using Holder = std::variant<std::monostate, Ptr<Fn>, Type *>;
   Holder _holder;
 
   /// the module this stub is defined in

@@ -12,13 +12,6 @@ class Stub;
 struct Path;
 class Type;
 
-class Fn;
-struct FnParam;
-
-class Stmt;
-class Block;
-class RetStmt;
-
 class StructExpr;
 struct IntegerE;
 struct IfExpr;
@@ -26,8 +19,15 @@ class BinaryExpr;
 class ParenExpr;
 class StructExpr;
 class Call;
+class Block;
 using Expr =
     std::variant<Ptr<IntegerE>, Ptr<IfExpr>, Ptr<BinaryExpr>, Ptr<ParenExpr>,
                  Ptr<StructExpr>, Ptr<Call>, Ptr<Block>>;
+
+class Fn;
+struct FnParam;
+
+class RetStmt;
+using Stmt = std::variant<Expr, RetStmt*>;
 
 }  // namespace x::pt

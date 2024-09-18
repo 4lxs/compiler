@@ -11,16 +11,10 @@
 
 #include <ranges>
 #include <utility>
-#include <variant>
 
 #include "x/ast/expr.hpp"
 #include "x/ast/stmt.hpp"
 #include "x/ast/type.hpp"
-#include "x/common.hpp"
-#include "x/pt/expr.hpp"
-#include "x/pt/module.hpp"
-#include "x/pt/stmt.hpp"
-#include "x/pt/type.hpp"
 
 namespace x {
 
@@ -70,9 +64,11 @@ class Compiler {
         break;
       case ast::Stmt::SK_Function:
         // all functions should live in context._functions
-      case ast::Stmt::SK_ExprBegin:
+      case ast::Stmt::SK_Expr:
       case ast::Stmt::SK_ExprEnd:
         std::unreachable();
+      case ast::Stmt::SK_Builtin:
+        break;
     }
   }
   //

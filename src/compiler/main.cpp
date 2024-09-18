@@ -132,7 +132,7 @@ void compile(std::string_view filename) {
   //   llvm::outs() << "\n";
   // }
 
-  sema::Sema anal(*parsetree);
+  sema::Sema anal(parsetree.get());
 
   Ptr<ast::Context> ast = anal.finish();
 

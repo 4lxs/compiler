@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "pt.hpp"
-#include "x/ast/fwd_decl.hpp"
 #include "x/pt/block.hpp"
 #include "x/pt/expr.hpp"
 
@@ -31,22 +30,12 @@ class RetStmt {
   std::optional<Expr> _retVal;
 };
 
-class VarDef {};
+class VarDef {
+  // Expr _val;
+  // Stub *_stub;
+};
 
 class TypeDef {};
-
-class Stmt {
- public:
-  explicit Stmt(auto stmt) : _stmt{std::move(stmt)} {}
-
- private:
-  friend sema::Sema;
-  auto accept(auto const &consumer) { return std::visit(consumer, _stmt); };
-
-  // std::variant<, Ptr<TypeDef>, Ptr<VarDef>, Ptr<Block>,
-  // Ptr<RetStmt>>
-  std::variant<Expr, Ptr<RetStmt>> _stmt;
-};
 
 class Fn {
  public:

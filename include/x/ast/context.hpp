@@ -6,36 +6,45 @@
 #include <vector>
 
 #include "fwd_decl.hpp"
+#include "x/common.hpp"
 #include "x/sema/fwd_decl.hpp"
 
 namespace x::ast {
 
 class Context {
  public:
-  template <typename T>
-    requires std::derived_from<T, Stmt> || std::derived_from<T, Expr> ||
-             std::derived_from<T, Type>
-  T *allocate(size_t alignment = 8) {
-    return reinterpret_cast<T *>(allocate(sizeof(T), alignment));
-  }
+  // builtin types
+  not_null<Type *> _strTy;
+  not_null<Type *> _int32Ty;
+  not_null<Type *> _int64Ty;
+  not_null<Type *> _boolTy;
+  not_null<Type *> _voidTy;
 
+  /// this is an expression with void type. it's used in places that are
+  /// expressions, but don't have a value. e.g. a call expr that calls a
+  /// function returning void.
+  not_null<Expr *> _voidExpr;
+
+  Context();
+
+ private:
  public:  // TODO: temp
   friend class sema::Sema;
   std::vector<Fn *> _functions;
   std::vector<Type *> _types;
 
-  friend void * ::operator new(size_t bytes, x::ast::Context const &ctx,
-                               size_t alignment);
-  void *allocate(size_t size, size_t alignment) const {
-    return _allocator.Allocate(size, alignment);
+ public:  // TODO: friend doesn't work
+  template <typename, typename>
+  friend class AllowAlloc;
+
+  template <typename T>
+    requires std::derived_from<T, Stmt> || std::derived_from<T, Type>
+  T *allocate(size_t alignment = 8) {
+    return reinterpret_cast<T *>(_allocator.Allocate(sizeof(T), alignment));
   }
 
+ private:
   mutable llvm::BumpPtrAllocator _allocator;
 };
 
 }  // namespace x::ast
-
-inline void *operator new(size_t bytes, x::ast::Context const &ctx,
-                          size_t alignment) {
-  return ctx.allocate(bytes, alignment);
-}

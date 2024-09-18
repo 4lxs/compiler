@@ -189,6 +189,10 @@ std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
   return {};
 }
 
+// std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
+//
+// }
+
 std::vector<pt::FnParam> Visitor::parse_params(
     parser::XParser::ParamsContext* ctx) {
   auto names = ctx->Ident();

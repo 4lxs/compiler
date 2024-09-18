@@ -6,7 +6,7 @@ add_library(${NAME} sema.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 
-target_link_libraries(${NAME} PRIVATE libs)
+target_link_libraries(${NAME} PRIVATE libs pt ast)
 
 target_include_directories(
   ${NAME} ${WARNING_GUARD}

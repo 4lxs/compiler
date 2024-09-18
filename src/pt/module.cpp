@@ -32,7 +32,7 @@ Stub *Module::get_stub(Path &&path) {
 }
 
 Module::Module(Context *ctx) : _path{{} /* updated by context */}, _ctx{ctx} {
-  get_stub("I32")->define_type(std::make_unique<Type>(Type::Kind::Number));
+  get_stub("I32")->define_type(_ctx->_numTy.get());
 }
 
 //===============
@@ -83,11 +83,10 @@ Type *Stub::use_type() {
   Type *ret{};
 
   if (_holder.index() == 0) {
-    auto type = std::make_unique<Type>(Type::Kind::Number);
-    ret = type.get();
-    _holder = std::move(type);
-  } else if (auto *type = std::get_if<Ptr<Type>>(&_holder)) {
-    ret = type->get();
+    auto *type = _module->_ctx->_numTy.get();
+    _holder = type;
+  } else if (auto *type = std::get_if<Type *>(&_holder)) {
+    ret = *type;
   } else {
     spdlog::error("different definitions of stub");
     std::terminate();
@@ -96,13 +95,13 @@ Type *Stub::use_type() {
   return ret;
 }
 
-void Stub::define_type(Ptr<Type> type) {
+void Stub::define_type(Type *type) {
   spdlog::info("defining type {}", _name);
   if (_holder.index() != 0) {
     std::terminate();
   }
 
-  _holder = std::move(type);
+  _holder = type;
 }
 
 Stub::Stub(std::string &&name, Module *module)

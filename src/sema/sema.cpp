@@ -1,6 +1,7 @@
 #include "x/sema/sema.hpp"
 
 #include <memory>
+#include <utility>
 #include <variant>
 
 #include "x/ast/context.hpp"
@@ -14,8 +15,8 @@
 
 namespace x::sema {
 
-Sema::Sema(pt::Context const &ctx) {
-  for (auto const &[_, module] : ctx._modules) {
+Sema::Sema(pt::Context *ctx) : _pt(ctx) {
+  for (auto const &[_, module] : ctx->_modules) {
     add(*module);
   }
 }
@@ -43,10 +44,10 @@ void Sema::add(pt::Module const &module) {
                      _ast->_functions.push_back(newfn);
                      _maps.insert(func.get(), newfn);
                    },
-                   [&, this](Ptr<pt::Type> const &type) {
-                     ast::Type *newtype = ast::Type::Allocate(*_ast);
-                     _ast->_types.push_back(newtype);
-                     _maps.insert(type.get(), newtype);
+                   [&, this](pt::Type *const &type) {
+                     // ast::Type *newtype = ast::Type::Allocate(*_ast);
+                     // _ast->_types.push_back(newtype);
+                     // _maps.insert(type, newtype);
                    },
                },
                stub->_holder);
@@ -54,11 +55,13 @@ void Sema::add(pt::Module const &module) {
 
   for (auto const &[_, stub] : module._items) {
     spdlog::info("adding: {}", stub->_name);
-    std::visit(overloaded{[this](auto const &item) { check(item.get()); },
-                          [](std::monostate) { std::terminate(); }
+    std::visit(
+        overloaded{[this](Ptr<pt::Fn> const &item) { check(item.get()); },
+                   [this](pt::Type *item) { check(item); },
+                   [](std::monostate) { std::terminate(); }
 
-               },
-               stub->_holder);
+        },
+        stub->_holder);
   }
 }
 
@@ -72,10 +75,8 @@ ast::Block *Sema::check(pt::Block &block) {
     });
   }
 
-  ast::Expr *terminator = nullptr;
-  if (block._end.has_value()) {
-    terminator = check(block._end.value());
-  }
+  ast::Expr *terminator =
+      block._end.has_value() ? check(block._end.value()) : _ast->_voidExpr;
 
   return ast::Block::Create(*_ast, std::move(body), terminator);
 }
@@ -93,29 +94,29 @@ ast::StructLiteral *Sema::check(pt::StructExpr &expr) {
 
 ast::Type *Sema::check(pt::Type *type) {
   if (type == nullptr) {
-    return _voidType;
+    return _ast->_voidTy;
   }
 
   auto [astType, wasInitialized] = _maps.get(type, true);
+  spdlog::info("initialized {}? {}", fmt::ptr(astType), wasInitialized);
   if (wasInitialized) {
     return astType;
   }
 
+  assert(false);
   astType->Create(ast::Type::Kind::I32);
 
   return astType;
 }
 
 ast::Return *Sema::check(Ptr<pt::RetStmt> &stmt) {
-  ast::Expr *retVal = nullptr;
-  if (stmt->_retVal.has_value()) {
-    retVal = check(stmt->_retVal.value());
-  }
+  ast::Expr *retVal = stmt->_retVal.has_value() ? check(stmt->_retVal.value())
+                                                : _ast->_voidExpr;
 
   return ast::Return::Create(*_ast, retVal);
 }
 
-ast::Expr *Sema::check(pt::Expr &expr, pt::Type *type) {
+not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
   return std::visit(
       overloaded{
           [this](Ptr<pt::IntegerE> const &expr) -> ast::Expr * {
@@ -126,17 +127,30 @@ ast::Expr *Sema::check(pt::Expr &expr, pt::Type *type) {
                                        check(*expr->args));
           },
           [this](Ptr<pt::IfExpr> const &expr) -> ast::Expr * {
-            return ast::If::Create(
-                *_ast, check(expr->cond), check(*expr->then),
-                expr->else_ != nullptr ? check(*expr->else_) : nullptr);
+            not_null<ast::Expr *> cond = check(expr->cond);
+            not_null<ast::Block *> then = check(*expr->then);
+            ast::Block *els =
+                expr->else_ != nullptr ? check(*expr->else_) : nullptr;
+
+            if (cond->type() != _ast->_boolTy) {
+              spdlog::error("if condition must be of type bool");
+              std::terminate();
+            }
+            if (then->type() != els->type()) {
+              spdlog::error("if branches must have same type");
+              std::terminate();
+            }
+            return ast::If::Create(*_ast, cond, then, els);
           },
           [this](Ptr<pt::BinaryExpr> const &expr) -> ast::Expr * {
             ast::Expr *lhs = check(expr->l);
             ast::Expr *rhs = check(expr->r);
+            assert(lhs->type() == rhs->type());
+
             switch (expr->op) {
               case pt::BinaryExpr::Operator::Plus:
                 return ast::Builtin::Create(*_ast, ast::Builtin::Op::iAdd,
-                                            std::vector{lhs, rhs});
+                                            std::vector{lhs, rhs}, lhs->type());
               case pt::BinaryExpr::Operator::Minus:
               case pt::BinaryExpr::Operator::Star:
               case pt::BinaryExpr::Operator::Slash:
@@ -144,7 +158,8 @@ ast::Expr *Sema::check(pt::Expr &expr, pt::Type *type) {
                 assert(false);
               case pt::BinaryExpr::Operator::Less:
                 return ast::Builtin::Create(*_ast, ast::Builtin::Op::iLess,
-                                            std::vector{lhs, rhs});
+                                            std::vector{lhs, rhs},
+                                            _ast->_boolTy);
             }
           },
           [](auto const & /*expr*/) -> ast::Expr * { assert(false); },
@@ -164,8 +179,12 @@ ast::Fn *Sema::check(pt::Fn *func) {
   for (auto const &[_, type] : func->_proto.params) {
     params.push_back(ast::Fn::Param(func->name(), check(type)));
   }
-  astFn->Create(func->name(), std::move(params), check(*func->_body),
-                check(func->_proto.ret));
+  ast::Block *body = check(*func->_body);
+  ast::Type *retType = check(func->_proto.ret);
+
+  assert(body->type() != retType);
+
+  astFn->Create(func->name(), std::move(params), body, retType);
 
   return astFn;
 }
