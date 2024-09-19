@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "pt.hpp"
+#include "fwd_decl.hpp"
 
 namespace x::pt {
 
@@ -25,7 +25,7 @@ struct Path {
     return Path{std::move(components), _externalPath};
   }
 
-  constexpr std::strong_ordering operator<=>(const Path &other) const {
+  constexpr std::strong_ordering operator<=>(Path const &other) const {
     if (_externalPath != other._externalPath) {
       return _externalPath ? std::strong_ordering::greater
                            : std::strong_ordering::less;
@@ -34,6 +34,6 @@ struct Path {
   };
 };
 
-std::string format_as(const Path &path);
+std::string format_as(Path const &path);
 
 }  // namespace x::pt

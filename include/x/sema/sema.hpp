@@ -8,7 +8,7 @@
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
 #include "x/pt/context.hpp"
-#include "x/pt/pt.hpp"
+#include "x/pt/fwd_decl.hpp"
 #include "x/pt/type.hpp"
 
 namespace x::sema {
@@ -29,7 +29,8 @@ class Sema {
  private:
   ast::Fn* check(pt::Fn* func);
   ast::Type* check(pt::Type* type);
-  ast::Return* check(Ptr<pt::RetStmt>& stmt);
+  ast::Return* check(pt::RetStmt* stmt);
+  ast::VarDecl* check(pt::VarDef* stmt);
   not_null<ast::Expr*> check(pt::Expr& expr);
 
   ast::Block* check(pt::Block& block);
@@ -54,8 +55,8 @@ class Sema {
    public:
     explicit Mappings(std::map<pt::Type*, ast::Type*> typeMap)
         : _typeMap(std::move(typeMap)) {
-      for (auto& [_, ast] : _typeMap) {
-        spdlog::info("initializing {}", fmt::ptr(ast));
+      for (auto& [pt, ast] : _typeMap) {
+        spdlog::info("initializing {} to {}", fmt::ptr(pt), fmt::ptr(ast));
         ast = initialized(ast);
       }
     }

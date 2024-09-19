@@ -1,13 +1,10 @@
 #include "visitor.hpp"
 
 #include <any>
-#include <memory>
 #include <ranges>
 
 #include "XParser.h"
 #include "spdlog/spdlog.h"
-#include "x/ast/expr.hpp"
-#include "x/ast/stmt.hpp"
 #include "x/pt/expr.hpp"
 #include "x/pt/module.hpp"
 
@@ -40,8 +37,7 @@ std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
 
   visitBlock(ctx->block());
 
-  stub->function(std::move(prototype),
-                 std::move(std::get<Ptr<pt::Block>>(_stack.pop())));
+  stub->function(std::move(prototype), std::get<pt::Block*>(_stack.pop()));
 
   return {};
 }
@@ -51,11 +47,11 @@ std::any Visitor::visitReturn(parser::XParser::ReturnContext* ctx) {
 
   auto* retVal = ctx->expr();
   if (retVal == nullptr) {
-    _block->ret(std::nullopt);
+    _block->add(pt::RetStmt::Create(*_ctx, std::nullopt));
   } else {
     visit(retVal);
 
-    _block->ret(_stack.pop());
+    _block->add(pt::RetStmt::Create(*_ctx, _stack.pop()));
   }
 
   return {};
@@ -66,16 +62,16 @@ std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
 
   assert(_block != nullptr);
 
-  Ptr<pt::StructExpr> args = std::get<Ptr<pt::StructExpr>>(_stack.pop());
+  auto* args = std::get<pt::StructExpr*>(_stack.pop());
   pt::Fn* func = get_stub(ctx->fn)->function(*args);
 
-  _stack.push(std::make_unique<pt::Call>(func, std::move(args)));
+  _stack.push(pt::Call::Create(*_ctx, func, args));
 
   return {};
 }
 
 std::any Visitor::visitIntPE(parser::XParser::IntPEContext* ctx) {
-  _stack.push(std::make_unique<pt::IntegerE>(ctx->getText()));
+  _stack.push(pt::IntegerE::Create(*_ctx, ctx->getText()));
 
   return {};
 }
@@ -112,8 +108,7 @@ std::any Visitor::visitBinaryE(parser::XParser::BinaryEContext* ctx) {
       std::terminate();
   }
 
-  _stack.push(std::make_unique<pt::BinaryExpr>(std::move(exprs[0]),
-                                               std::move(exprs[1]), opr));
+  _stack.push(pt::BinaryExpr::Create(*_ctx, exprs[0], exprs[1], opr));
 
   return {};
 }
@@ -127,10 +122,10 @@ std::any Visitor::visitAnonStruct(parser::XParser::AnonStructContext* ctx) {
   fields.reserve(names.size());
 
   for (auto&& [ident, expr] : std::views::zip(names, vals)) {
-    fields.emplace_back(ident->getText(), std::move(expr));
+    fields.emplace_back(ident->getText(), expr);
   }
 
-  _stack.push(pt::StructExpr::Create(std::move(fields)));
+  _stack.push(pt::StructExpr::Create(*_ctx, std::move(fields)));
 
   return {};
 }
@@ -139,7 +134,7 @@ std::any Visitor::visitStmt(parser::XParser::StmtContext* ctx) {
   visitChildren(ctx);
 
   if (_stack.size() > 0) {
-    _block->expr(_stack.pop());
+    _block->add(_stack.pop());
   }
 
   assert(_stack.size() == 0);
@@ -154,18 +149,17 @@ std::any Visitor::visitIf_(parser::XParser::If_Context* ctx) {
 
   visitBlock(ctx->then);
 
-  Ptr<pt::Block> then = std::get<Ptr<pt::Block>>(_stack.pop());
+  not_null<pt::Block*> then = std::get<pt::Block*>(_stack.pop());
 
-  Ptr<pt::Block> else_;
+  pt::Block* else_{};
 
   if (ctx->else_ != nullptr) {
     visitBlock(ctx->else_);
 
-    else_ = std::get<Ptr<pt::Block>>(_stack.pop());
+    else_ = std::get<pt::Block*>(_stack.pop());
   }
 
-  _stack.push(std::make_unique<pt::IfExpr>(std::move(cond), std::move(then),
-                                           std::move(else_)));
+  _stack.push(pt::IfExpr::Create(*_ctx, cond, then, else_));
 
   return {};
 }
@@ -173,25 +167,39 @@ std::any Visitor::visitIf_(parser::XParser::If_Context* ctx) {
 std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
   pt::Block* oldblock = _block;
 
-  auto block = std::make_unique<pt::Block>();
-  _block = block.get();
+  _block = pt::Block::Create(*_ctx);
 
   visitChildren(ctx);
 
   if (ctx->terminator != nullptr) {
-    block->setTerminator(_stack.pop());
+    _block->setTerminator(_stack.pop());
   }
 
-  _block = oldblock;
+  _stack.push(_block);
 
-  _stack.push(std::move(block));
+  _block = oldblock;
 
   return {};
 }
 
-// std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
-//
-// }
+std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
+  std::string name = ctx->name->getText();
+
+  pt::Stub* stub = _module->get_stub(std::move(name));
+
+  assert(ctx->val);
+  visit(ctx->val);
+
+  _block->add(pt::VarDef::Create(*_ctx, stub, _stack.pop()));
+
+  return {};
+}
+
+std::any Visitor::visitVarE(parser::XParser::VarEContext* ctx) {
+  // pt::Stub* stub = get_stub(ctx->path());
+
+  return {};
+}
 
 std::vector<pt::FnParam> Visitor::parse_params(
     parser::XParser::ParamsContext* ctx) {
@@ -224,7 +232,7 @@ pt::Stub* Visitor::get_stub(parser::XParser::PathContext* ctx) const {
 pt::Expr Visitor::Stack_::pop() {
   assert(!_stack.empty());
 
-  auto ret = std::move(_stack.back());
+  auto ret = _stack.back();
   _stack.pop_back();
   return ret;
 }

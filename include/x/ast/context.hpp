@@ -6,12 +6,15 @@
 #include <vector>
 
 #include "fwd_decl.hpp"
+#include "spdlog/spdlog.h"
 #include "x/common.hpp"
 #include "x/sema/fwd_decl.hpp"
 
 namespace x::ast {
 
 class Context {
+  mutable llvm::BumpPtrAllocator _allocator;
+
  public:
   // builtin types
   not_null<Type *> _strTy;
@@ -39,12 +42,9 @@ class Context {
 
   template <typename T>
     requires std::derived_from<T, Stmt> || std::derived_from<T, Type>
-  T *allocate(size_t alignment = 8) {
+  T *allocate(size_t alignment = 8) const {
     return reinterpret_cast<T *>(_allocator.Allocate(sizeof(T), alignment));
   }
-
- private:
-  mutable llvm::BumpPtrAllocator _allocator;
 };
 
 }  // namespace x::ast

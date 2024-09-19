@@ -23,7 +23,7 @@ staticDef
     ;
 
 varDef
-    : name=Ident Cln type=path? (Eq val=expr)?
+    : Let name=Ident Cln type=path? (Eq val=expr)?
     ;
 
 typeDef
@@ -61,6 +61,7 @@ if_
 
 expr
     : if_ #ifE
+    | path #varE
     // primary expressions
     | IntegerLiteral #intPE
     | String #strPE

@@ -4,9 +4,10 @@
 
 #include <map>
 
+#include "spdlog/spdlog.h"
 #include "x/common.hpp"
-#include "x/pt/module.hpp"
-#include "x/pt/pt.hpp"
+#include "x/pt/fwd_decl.hpp"
+#include "x/pt/path.hpp"
 #include "x/pt/type.hpp"
 #include "x/sema/fwd_decl.hpp"
 
@@ -40,19 +41,22 @@ class Context {
  private:
   Context() = default;
 
+ public:  // TODO: friend doesn't work
+  template <typename, typename>
   friend class AllowAlloc;
+
   template <typename T>
-    requires std::derived_from<T, Stmt> || std::derived_from<T, Type>
-  T *allocate(size_t alignment = 8) {
+  // requires std::derived_from<T, Stmt> || std::derived_from<T, Type>
+  T *allocate(size_t alignment = 8) const {
     return reinterpret_cast<T *>(_allocator.Allocate(sizeof(T), alignment));
   }
 
+ private:
   mutable llvm::BumpPtrAllocator _allocator;
 
-  friend Module;
   friend sema::Sema;
 
-  std::map<Path, Ptr<Module>> _modules;
+  std::map<Path, Module *> _modules;
 };
 
 }  // namespace x::pt

@@ -8,11 +8,7 @@
 
 namespace x::pt {
 
-void Block::ret(std::optional<Expr> retval) {
-  _body.emplace_back(std::make_unique<RetStmt>(std::move(retval)));
-}
-
-void Block::expr(Expr expr) { _body.emplace_back(std::move(expr)); }
+void Block::add(Expr&& expr) { _body.emplace_back(std::move(expr)); }
 
 void Block::setTerminator(Expr expr) {
   assert(!_end.has_value());

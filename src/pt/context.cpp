@@ -20,13 +20,13 @@ Ptr<Context> Context::Create() {
 }
 
 Module *Context::module(Path &&path) {
-  auto [itr, ok] = _modules.insert({path, Ptr<Module>(new Module(this))});
+  auto [itr, ok] = _modules.insert({path, Module::Create(*this, this)});
   if (!ok) {
     spdlog::error("module already exists");
   }
   itr->second->_path = std::move(path);
 
-  return itr->second.get();
+  return itr->second;
 }
 
 Stub *Context::stub(Path &&path) {
@@ -35,7 +35,7 @@ Stub *Context::stub(Path &&path) {
     spdlog::error("unable to find module for path {}", format_as(path));
     std::terminate();
   }
-  Module *module = itr->second.get();
+  Module *module = itr->second;
 
   return module->get_stub(std::move(path._components.back()));
 }

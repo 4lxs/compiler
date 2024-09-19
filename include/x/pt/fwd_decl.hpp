@@ -12,22 +12,23 @@ class Stub;
 struct Path;
 class Type;
 
+class VarExpr;
 class StructExpr;
-struct IntegerE;
-struct IfExpr;
+class IntegerE;
+class IfExpr;
 class BinaryExpr;
 class ParenExpr;
 class StructExpr;
 class Call;
 class Block;
-using Expr =
-    std::variant<Ptr<IntegerE>, Ptr<IfExpr>, Ptr<BinaryExpr>, Ptr<ParenExpr>,
-                 Ptr<StructExpr>, Ptr<Call>, Ptr<Block>>;
+using Expr = std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*,
+                          StructExpr*, Call*, Block*, VarExpr*>;
 
 class Fn;
 struct FnParam;
 
 class RetStmt;
-using Stmt = std::variant<Expr, RetStmt*>;
+class VarDef;
+using Stmt = std::variant<Expr, RetStmt*, VarDef*>;
 
 }  // namespace x::pt

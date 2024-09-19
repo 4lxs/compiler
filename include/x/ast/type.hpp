@@ -2,7 +2,7 @@
 
 #include "fwd_decl.hpp"
 #include "spdlog/spdlog.h"
-#include "x/pt/pt.hpp"
+#include "x/pt/fwd_decl.hpp"
 
 namespace x::ast {
 
@@ -17,6 +17,7 @@ class Type : public AllowAlloc<Context, Type> {
     I64,
     Void,
   } _kind;
+  int i;
 
   void prettyPrint() const {
     switch (_kind) {

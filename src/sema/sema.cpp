@@ -10,6 +10,7 @@
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
 #include "x/pt/context.hpp"
+#include "x/pt/expr.hpp"
 #include "x/pt/module.hpp"
 #include "x/pt/type.hpp"
 
@@ -39,10 +40,10 @@ void Sema::add(pt::Module const &module) {
                      spdlog::error("undefined item");
                      std::terminate();
                    },
-                   [&, this](Ptr<pt::Fn> const &func) {
+                   [&, this](pt::Fn *func) {
                      ast::Fn *newfn = ast::Fn::Allocate(*_ast);
                      _ast->_functions.push_back(newfn);
-                     _maps.insert(func.get(), newfn);
+                     _maps.insert(func, newfn);
                    },
                    [&, this](pt::Type *const &type) {
                      // ast::Type *newtype = ast::Type::Allocate(*_ast);
@@ -55,24 +56,34 @@ void Sema::add(pt::Module const &module) {
 
   for (auto const &[_, stub] : module._items) {
     spdlog::info("adding: {}", stub->_name);
-    std::visit(
-        overloaded{[this](Ptr<pt::Fn> const &item) { check(item.get()); },
-                   [this](pt::Type *item) { check(item); },
-                   [](std::monostate) { std::terminate(); }
+    std::visit(overloaded{[this](auto *item) { check(item); },
+                          [](std::monostate) { std::terminate(); }
 
-        },
-        stub->_holder);
+               },
+               stub->_holder);
   }
 }
 
 ast::Block *Sema::check(pt::Block &block) {
   std::vector<ast::Stmt *> body;
   for (pt::Stmt &stmt : block._body) {
-    stmt.accept(overloaded{
-        [this, &body](auto &stmt) {
-          body.push_back(static_cast<ast::Stmt *>(check(stmt)));
-        },
-    });
+    std::visit(overloaded{
+                   [this, &body](auto stmt) {
+                     body.push_back(static_cast<ast::Stmt *>(check(stmt)));
+                   },
+                   [this, &body](pt::VarDef *stmt) {
+                     ast::Expr *val = check(stmt->_val);
+                     auto *decl = ast::VarDecl::Create(
+                         *_ast, stmt->_stub->name(), val->type());
+                     auto *assign = ast::Assign::Create(*_ast, decl, val);
+                     body.push_back(decl);
+                     body.push_back(assign);
+                   },
+                   [this, &body](pt::Expr &stmt) {
+                     body.push_back(static_cast<ast::Stmt *>(check(stmt)));
+                   },
+               },
+               stmt);
   }
 
   ast::Expr *terminator =
@@ -109,7 +120,7 @@ ast::Type *Sema::check(pt::Type *type) {
   return astType;
 }
 
-ast::Return *Sema::check(Ptr<pt::RetStmt> &stmt) {
+ast::Return *Sema::check(pt::RetStmt *stmt) {
   ast::Expr *retVal = stmt->_retVal.has_value() ? check(stmt->_retVal.value())
                                                 : _ast->_voidExpr;
 
@@ -119,14 +130,14 @@ ast::Return *Sema::check(Ptr<pt::RetStmt> &stmt) {
 not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
   return std::visit(
       overloaded{
-          [this](Ptr<pt::IntegerE> const &expr) -> ast::Expr * {
+          [this](pt::IntegerE *const &expr) -> ast::Expr * {
             return ast::IntegerLiteral::Int32(*_ast, expr->_val);
           },
-          [this](Ptr<pt::Call> const &expr) -> ast::Expr * {
+          [this](pt::Call *const &expr) -> ast::Expr * {
             return ast::FnCall::Create(*_ast, check(expr->fn),
                                        check(*expr->args));
           },
-          [this](Ptr<pt::IfExpr> const &expr) -> ast::Expr * {
+          [this](pt::IfExpr *const &expr) -> ast::Expr * {
             not_null<ast::Expr *> cond = check(expr->cond);
             not_null<ast::Block *> then = check(*expr->then);
             ast::Block *els =
@@ -142,7 +153,7 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
             }
             return ast::If::Create(*_ast, cond, then, els);
           },
-          [this](Ptr<pt::BinaryExpr> const &expr) -> ast::Expr * {
+          [this](pt::BinaryExpr *const &expr) -> ast::Expr * {
             ast::Expr *lhs = check(expr->l);
             ast::Expr *rhs = check(expr->r);
             assert(lhs->type() == rhs->type());

@@ -9,6 +9,7 @@
 #include <llvm/IR/Verifier.h>
 #include <spdlog/spdlog.h>
 
+#include <map>
 #include <ranges>
 #include <utility>
 
@@ -36,7 +37,7 @@ class Compiler {
       spdlog::info("body");
       for (auto const& stmt : fnctn->_block->_body) {
         spdlog::info("stmt");
-        compile(*stmt);
+        compile(stmt);
       }
       if (llvm::verifyFunction(*func, &llvm::errs())) {
         std::terminate();
@@ -46,10 +47,10 @@ class Compiler {
     _currentFunction = nullptr;
   };
 
-  void compile(ast::Stmt const& stmt) {
-    switch (stmt.get_kind()) {
+  void compile(ast::Stmt* stmt) {
+    switch (stmt->get_kind()) {
       case ast::Stmt::SK_Return: {
-        auto const& ret = llvm::cast<ast::Return>(stmt);
+        auto const& ret = llvm::cast<ast::Return>(*stmt);
         spdlog::info("ret");
         _builder.CreateRet(ret._val != nullptr ? eval(*ret._val) : nullptr);
       } break;
@@ -60,7 +61,7 @@ class Compiler {
       case ast::Stmt::SK_If:
       case ast::Stmt::SK_Call:
       case ast::Stmt::SK_Block:
-        eval(stmt);
+        eval(*stmt);
         break;
       case ast::Stmt::SK_Function:
         // all functions should live in context._functions
@@ -69,6 +70,17 @@ class Compiler {
         std::unreachable();
       case ast::Stmt::SK_Builtin:
         break;
+      case ast::Stmt::SK_VarDecl: {
+        auto* decl = llvm::cast<ast::VarDecl>(stmt);
+        llvm::AllocaInst* allocaInst = _builder.CreateAlloca(
+            to_llvm_type(decl->_type), nullptr, decl->_name);
+        _allocs.insert({decl, allocaInst});
+      } break;
+      case ast::Stmt::SK_Assign: {
+        auto* ass = llvm::cast<ast::Assign>(stmt);
+        llvm::AllocaInst* var = _allocs.at(ass->_variable);
+        _builder.CreateStore(eval(*ass->_value), var);
+      } break;
     }
   }
   //
@@ -153,7 +165,7 @@ class Compiler {
       case ast::Stmt::SK_Block: {
         auto const& block = llvm::cast<ast::Block>(expr);
         for (ast::Stmt* stmt : block._body) {
-          compile(*stmt);
+          compile(stmt);
         }
 
         return block.terminator != nullptr ? eval(*block.terminator) : nullptr;
@@ -210,8 +222,7 @@ class Compiler {
   llvm::Module _mod{"my cool jit", _ctx};
   llvm::IRBuilder<> _builder{_ctx};
 
-  llvm::Value* _valueFalse = _builder.getInt1(false);
-  llvm::Value* _valueTrue = _builder.getInt1(true);
+  std::map<ast::VarDecl*, llvm::AllocaInst*> _allocs;
 
   llvm::Function* _currentFunction{};
 };

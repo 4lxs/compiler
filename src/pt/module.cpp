@@ -4,9 +4,6 @@
 #include <variant>
 
 #include "spdlog/spdlog.h"
-#include "x/ast/expr.hpp"
-#include "x/ast/stmt.hpp"
-#include "x/ast/type.hpp"
 #include "x/common.hpp"
 #include "x/pt/context.hpp"
 #include "x/pt/type.hpp"
@@ -43,12 +40,11 @@ Fn *Stub::function(StructExpr const & /*params*/) {
   Fn *ret{};
 
   if (_holder.index() == 0) {
-    auto func =
-        std::make_unique<Fn>(FnProto(), std::make_unique<Block>(), this);
-    ret = func.get();
-    _holder = std::move(func);
-  } else if (auto *func = std::get_if<Ptr<Fn>>(&_holder)) {
-    ret = func->get();
+    Context &ctx = *_module->_ctx;
+    ret = Fn::Create(ctx, FnProto(), Block::Create(ctx), this);
+    _holder = ret;
+  } else if (auto *func = std::get_if<Fn *>(&_holder)) {
+    ret = *func;
   } else {
     spdlog::error("different definitions of stub");
     std::terminate();
@@ -57,7 +53,7 @@ Fn *Stub::function(StructExpr const & /*params*/) {
   return ret;
 }
 
-Fn *Stub::function(FnProto &&proto, Ptr<Block> body) {
+Fn *Stub::function(FnProto &&proto, Block *body) {
   spdlog::info("defining function {}", _name);
   if (_holder.index() != 0) {
     std::terminate();
@@ -66,11 +62,10 @@ Fn *Stub::function(FnProto &&proto, Ptr<Block> body) {
   Fn *ret{};
 
   if (_holder.index() == 0) {
-    auto func = std::make_unique<Fn>(std::move(proto), std::move(body), this);
-    ret = func.get();
-    _holder = std::move(func);
-  } else if (auto *func = std::get_if<Ptr<Fn>>(&_holder)) {
-    ret = func->get();
+    ret = Fn::Create(*_module->_ctx, std::move(proto), body, this);
+    _holder = ret;
+  } else if (auto *func = std::get_if<Fn *>(&_holder)) {
+    ret = *func;
   } else {
     spdlog::error("different definitions of stub");
     std::terminate();

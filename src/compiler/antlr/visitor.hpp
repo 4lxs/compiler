@@ -38,7 +38,9 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitBlock(parser::XParser::BlockContext *ctx) override;
 
-  // std::any visitVarDef(parser::XParser::VarDefContext *ctx) override;
+  std::any visitVarDef(parser::XParser::VarDefContext *ctx) override;
+
+  std::any visitVarE(parser::XParser::VarEContext *ctx) override;
 
  private:
   [[nodiscard]]
@@ -60,11 +62,11 @@ class Visitor : public parser::XBaseVisitor {
 
   class Stack_ {
    public:
-    /// Expr is a variant
-    /// emplacing allows you to do push(A) instead of push(Expr(a))
-    template <typename... Args>
-    constexpr void push(Args &&...args) {
-      _stack.emplace_back(std::move(args)...);
+    /// Expr is a variant. emplacing allows you to do push(A) instead of
+    /// push(Expr(a))
+    template <typename TExpr>
+    constexpr void push(TExpr expr) {
+      _stack.emplace_back(expr);
     };
 
     pt::Expr pop();

@@ -4,29 +4,50 @@
 
 #include "x/common.hpp"
 #include "x/pt/block.hpp"
-#include "x/pt/pt.hpp"
+#include "x/pt/fwd_decl.hpp"
 
 namespace x::pt {
 
-struct IntegerE {
+class IntegerE : public AllowAlloc<Context, IntegerE> {
+ public:
   std::string _val;
+
+ private:
+  friend AllowAlloc;
+  explicit IntegerE(std::string val) : _val(std::move(val)) {}
 };
 
-struct BoolE {
+class BoolE : public AllowAlloc<Context, BoolE> {
+ public:
   bool _val;
+
+ private:
+  friend AllowAlloc;
+  explicit BoolE(bool val) : _val(val) {}
 };
 
-struct StringE {
+class StringE : public AllowAlloc<Context, StringE> {
+ public:
   std::string _val;
+
+ private:
+  friend AllowAlloc;
+  explicit StringE(std::string val) : _val(std::move(val)) {}
 };
 
-struct IfExpr {
+class IfExpr : public AllowAlloc<Context, IfExpr> {
+ public:
   pt::Expr cond;
-  Ptr<Block> then;
-  Ptr<Block> else_;
+  not_null<Block *> then;
+  Block *else_;
+
+ private:
+  friend AllowAlloc;
+  IfExpr(pt::Expr cond, not_null<Block *> then, Block *els)
+      : cond(cond), then(then), else_(els) {}
 };
 
-class BinaryExpr {
+class BinaryExpr : public AllowAlloc<Context, BinaryExpr> {
  public:
   enum class Operator {
     Plus,
@@ -40,17 +61,29 @@ class BinaryExpr {
   Expr l;
   Expr r;
   Operator op;
+
+ private:
+  friend AllowAlloc;
+  BinaryExpr(Expr lhs, Expr rhs, Operator opr) : l(lhs), r(rhs), op(opr) {}
 };
 
-class ParenExpr {
+class ParenExpr : public AllowAlloc<Context, ParenExpr> {
  public:
   Expr inner;
+
+ private:
+  friend AllowAlloc;
+  explicit ParenExpr(Expr inner) : inner(inner) {}
 };
 
-class Call {
+class Call : public AllowAlloc<Context, Call> {
  public:
   Fn *fn;
-  Ptr<StructExpr> args;
+  not_null<StructExpr *> args;
+
+ private:
+  friend AllowAlloc;
+  Call(Fn *func, not_null<StructExpr *> args) : fn(func), args(args) {}
 };
 
 struct Field {
@@ -58,11 +91,16 @@ struct Field {
   Expr value;
 };
 
-class StructExpr {
+class StructExpr : public AllowAlloc<Context, StructExpr> {
  public:
-  static std::unique_ptr<StructExpr> Create(std::vector<Field> &&fields);
-
   std::vector<Field> fields;
+
+ private:
+  friend AllowAlloc;
+  explicit StructExpr(std::vector<Field> &&fields)
+      : fields(std::move(fields)) {}
 };
+
+// class VarExpr : public AllowAlloc<Context, VarExpr> {friend AllowAlloc;};
 
 }  // namespace x::pt

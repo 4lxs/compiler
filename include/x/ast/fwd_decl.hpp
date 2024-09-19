@@ -12,6 +12,8 @@ class Fn;
 
 class Stmt;
 class Return;
+class VarDecl;
+class Assign;
 
 class Expr;
 class IntegerLiteral;

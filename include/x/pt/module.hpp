@@ -7,14 +7,17 @@
 #include <variant>
 
 #include "x/common.hpp"
+#include "x/pt/context.hpp"
+#include "x/pt/fwd_decl.hpp"
 #include "x/pt/path.hpp"
-#include "x/pt/pt.hpp"
 #include "x/pt/stmt.hpp"
 #include "x/sema/fwd_decl.hpp"
 
 namespace x::pt {
 
-class Module {
+class Module : public AllowAlloc<Context, Module> {
+  friend AllowAlloc;
+
  public:
   /// get stub to a name in this module
   Stub *get_stub(std::string &&local_name);
@@ -50,7 +53,7 @@ class Stub {
   Fn *function(StructExpr const &params);
 
   /// use the stub as a function with given params
-  Fn *function(FnProto &&proto, Ptr<Block> body);
+  Fn *function(FnProto &&proto, Block *body);
 
   /// use the stub as a type
   Type *use_type();
@@ -75,7 +78,7 @@ class Stub {
   /// definition has not been provided yet.
   ///
   /// guaranteed to be valid only after a validate call
-  using Holder = std::variant<std::monostate, Ptr<Fn>, Type *>;
+  using Holder = std::variant<std::monostate, Fn *, Type *>;
   Holder _holder;
 
   /// the module this stub is defined in

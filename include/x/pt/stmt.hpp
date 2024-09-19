@@ -4,9 +4,10 @@
 #include <string>
 #include <vector>
 
-#include "pt.hpp"
+#include "fwd_decl.hpp"
+#include "x/common.hpp"
 #include "x/pt/block.hpp"
-#include "x/pt/expr.hpp"
+#include "x/pt/context.hpp"
 
 namespace x::pt {
 
@@ -21,34 +22,46 @@ struct FnProto {
   Type *ret;
 };
 
-class RetStmt {
+class RetStmt : public AllowAlloc<Context, RetStmt> {
+  friend AllowAlloc;
+
  public:
+  std::optional<Expr> _retVal;
+
+ private:
   /// @param val: return val;
   ///   nullptr -> return;
-  explicit RetStmt(std::optional<Expr> val);
-
-  std::optional<Expr> _retVal;
+  explicit RetStmt(std::optional<Expr> val) : _retVal(val) {}
 };
 
-class VarDef {
-  // Expr _val;
-  // Stub *_stub;
+class VarDef : public AllowAlloc<Context, VarDef> {
+  friend AllowAlloc;
+
+ public:
+  Expr _val;
+  Stub *_stub;
+
+ private:
+  VarDef(not_null<Stub *> stub, Expr &&val) : _val(val), _stub(stub) {};
 };
 
 class TypeDef {};
 
-class Fn {
+class Fn : public AllowAlloc<Context, Fn> {
  public:
-  friend Stub;
   friend sema::Sema;
-  explicit Fn(FnProto &&proto, Ptr<Block> body, Stub *stub);
 
   [[nodiscard]] std::string const &name() const;
 
-  Ptr<Block> _body;
+  not_null<Block *> _body;
   FnProto _proto;
 
-  Stub *_stub;
+  not_null<Stub *> _stub;
+
+ private:
+  friend AllowAlloc;
+  Fn(FnProto &&proto, not_null<Block *> body, not_null<Stub *> stub)
+      : _body(body), _proto(std::move(proto)), _stub(stub) {}
 };
 
 }  // namespace x::pt
