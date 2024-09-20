@@ -38,6 +38,28 @@ class Stmt {
   StmtKind _kind;
 };
 
+class Decl {
+ public:
+  enum class DeclKind {
+    Type,
+    Fn,
+    Var,
+  };
+
+  [[nodiscard]] DeclKind get_kind() const { return _kind; }
+
+  [[nodiscard]] std::string_view name() const { return _name; }
+
+ protected:
+  explicit Decl(DeclKind kind, std::string_view name)
+      : _name(name), _kind(kind) {}
+
+  std::string_view _name;
+
+ private:
+  DeclKind _kind;
+};
+
 class Return : public Stmt, public AllowAlloc<Context, Return> {
   friend AllowAlloc;
 
@@ -53,22 +75,23 @@ class Return : public Stmt, public AllowAlloc<Context, Return> {
   }
 };
 
-class VarDecl : public Stmt, public AllowAlloc<Context, VarDecl> {
+class VarDecl : public Stmt, public Decl, public AllowAlloc<Context, VarDecl> {
   friend AllowAlloc;
 
  public:
-  [[nodiscard]] std::string_view name() const { return _name; }
-
-  std::string_view _name;
   Type* _type;
 
  private:
   explicit VarDecl(std::string_view name, Type* type)
-      : Stmt(StmtKind::SK_VarDecl), _name(name), _type(type) {}
+      : Stmt(StmtKind::SK_VarDecl), Decl(DeclKind::Var, name), _type(type) {}
 
  public:
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_VarDecl;
+  }
+
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Var;
   }
 };
 
@@ -89,7 +112,7 @@ class Assign : public Stmt, public AllowAlloc<Context, Assign> {
   }
 };
 
-class FnDecl : public Stmt, public AllowAlloc<Context, FnDecl> {
+class FnDecl : public Stmt, public Decl, public AllowAlloc<Context, FnDecl> {
   friend AllowAlloc;
 
  public:
@@ -98,29 +121,36 @@ class FnDecl : public Stmt, public AllowAlloc<Context, FnDecl> {
     Type* type;
   };
 
+  void define(not_null<Block*> block) { _block = block; }
+
   [[nodiscard]] std::string_view name() const { return _name; }
+  [[nodiscard]] Block* block() const { return _block; }
+  [[nodiscard]] not_null<Type*> ret() const { return _ret; }
+  [[nodiscard]] std::vector<Param> const& params() const { return _params; }
 
  private:
-  FnDecl(std::string_view name, std::vector<Param>&& params, Block* body,
-         Type* ret)
+  FnDecl(std::string_view name, std::vector<Param>&& params,
+         not_null<Type*> ret)
       : Stmt(SK_Function),
-        _name{name},
+        Decl(DeclKind::Fn, name),
         _params(std::move(params)),
-        _block(body),
         _ret(ret) {}
 
  public:  // TODO: temp
-  std::string_view _name;
-
   std::vector<Param> _params;
 
-  Block* _block;
+  not_null<Type*> _ret;
 
-  Type* _ret;
+  /// block is null until function is defined
+  Block* _block{};
 
  public:
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_Function;
+  }
+
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Fn;
   }
 };
 

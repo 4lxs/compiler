@@ -43,6 +43,7 @@ block
 
 stmt
     : if_
+    | block
     | expr Sc
     | varDef Sc
     | typeDef Sc
@@ -61,6 +62,7 @@ if_
 
 expr
     : if_ #ifE
+    | block #blockE
     | path #varE
     // primary expressions
     | IntegerLiteral #intPE

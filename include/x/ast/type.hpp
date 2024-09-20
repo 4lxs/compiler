@@ -4,11 +4,12 @@
 
 #include "fwd_decl.hpp"
 #include "spdlog/spdlog.h"
+#include "x/ast/stmt.hpp"
 #include "x/common.hpp"
 
 namespace x::ast {
 
-class Type : public AllowAlloc<Context, Type> {
+class Type : public Decl, public AllowAlloc<Context, Type> {
   friend AllowAlloc;
 
  public:
@@ -46,7 +47,13 @@ class Type : public AllowAlloc<Context, Type> {
   std::string_view _name;
 
  private:
-  explicit Type(Kind kind, std::string_view name) : _kind(kind), _name(name) {};
+  explicit Type(Kind kind, std::string_view name)
+      : Decl(DeclKind::Type, name), _kind(kind) {};
+
+ public:
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Type;
+  }
 };
 
 }  // namespace x::ast

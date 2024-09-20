@@ -1,5 +1,7 @@
 #include "x/sema/sema.hpp"
 
+#include <llvm/Support/Casting.h>
+
 #include <memory>
 #include <utility>
 #include <variant>
@@ -19,6 +21,8 @@
 namespace x::sema {
 
 Sema::Sema(pt::Context *ctx) : _pt(ctx) {
+  env.add(_ast->_int32Ty);
+
   for (auto const &module : ctx->_modules) {
     add(*module);
   }
@@ -27,16 +31,17 @@ Sema::Sema(pt::Context *ctx) : _pt(ctx) {
 Ptr<ast::Context> Sema::finish() { return std::move(_ast); }
 
 void Sema::add(pt::Module const &module) {
-  // first validate all stubs.  that is to allow stubs to cross-link. e.g. fn
-  // val stub needs pointer to return type stub
+  std::vector<std::pair<pt::FnDecl *, ast::FnDecl *>> functions;
+  // std::vector<std::pair<pt::TypeDecl *, ast::Type *>> types;
 
+  // first declare all top level decls. this is required for resolving
+  // references as they can be used before definition
   for (pt::TopLevelDecl const &decl : module._items) {
     std::visit(
         overloaded{
             [&, this](pt::FnDecl *func) {
               ast::FnDecl *newfn = ast::FnDecl::Allocate(*_ast);
-              _ast->_functions.push_back(newfn);
-              _maps.insert(func, newfn);
+              functions.emplace_back(func, newfn);
             },
             // [&, this](pt::Type *const &type) {
             //   // ast::Type *newtype = ast::Type::Allocate(*_ast);
@@ -47,16 +52,22 @@ void Sema::add(pt::Module const &module) {
         decl);
   }
 
-  for (auto const &stub : module._items) {
-    std::visit(
-        overloaded{
-            [this](auto *item) { check(item); },
-        },
-        stub);
+  // TODO: create types first, because functions may resolve them
+
+  // next declare top level items. we can't define them yet as they may refer to
+  // each other
+  for (auto const &[pt, ast] : functions) {
+    declare(ast, pt);
+  }
+
+  for (auto const &[pt, ast] : functions) {
+    define(ast, pt);
   }
 }
 
 ast::Block *Sema::check(pt::Block &block) {
+  SymbolTable::BlockRef ref = env.scope_begin();
+
   std::vector<ast::Stmt *> body;
   for (pt::Stmt &stmt : block._body) {
     std::visit(overloaded{
@@ -64,22 +75,28 @@ ast::Block *Sema::check(pt::Block &block) {
                      body.push_back(static_cast<ast::Stmt *>(check(stmt)));
                    },
                    [this, &body](pt::VarDecl *stmt) {
-                     ast::NamedDecl typedecl = env.resolve(stmt->_type);
-                     auto *type = std::get_if<ast::Type *>(&typedecl);
+                     ast::Decl *typedecl = env.resolve(stmt->_type);
+                     auto *type = llvm::dyn_cast<ast::Type>(typedecl);
                      if (type == nullptr) {
                        spdlog::error("expected type");
                        std::terminate();
                      }
+
                      auto *decl =
-                         ast::VarDecl::Create(*_ast, stmt->_name, *type);
+                         ast::VarDecl::Create(*_ast, stmt->_name, type);
                      body.push_back(decl);
-                     env.add(decl);
+
+                     // we need to evaluate expression before adding variable to
+                     // env to avoid referencing itself
                      if (!stmt->_val.has_value()) {
-                       return;
+                       env.add(decl->name(), decl);
                      }
+
                      ast::Expr *val = check(*stmt->_val);
                      auto *assign = ast::Assign::Create(*_ast, decl, val);
+
                      body.push_back(assign);
+                     env.add(decl->name(), decl);
                    },
                    [this, &body](pt::Expr &stmt) {
                      body.push_back(static_cast<ast::Stmt *>(check(stmt)));
@@ -90,6 +107,8 @@ ast::Block *Sema::check(pt::Block &block) {
 
   ast::Expr *terminator =
       block._end.has_value() ? check(block._end.value()) : _ast->_voidExpr;
+
+  env.scope_end(ref);
 
   return ast::Block::Create(*_ast, std::move(body), terminator);
 }
@@ -119,9 +138,9 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
             return ast::IntegerLiteral::Int32(*_ast, expr->_val);
           },
           [this](pt::Call *const &expr) -> ast::Expr * {
-            ast::NamedDecl decl = env.resolve(expr->fn);
-            if (auto *func = std::get_if<ast::FnDecl *>(&decl)) {
-              return ast::FnCall::Create(*_ast, *func, check(*expr->args));
+            ast::Decl *decl = env.resolve(expr->fn);
+            if (auto *func = llvm::dyn_cast<ast::FnDecl>(decl)) {
+              return ast::FnCall::Create(*_ast, func, check(*expr->args));
             }
             spdlog::error("cannot call non-function");
             std::terminate();
@@ -171,71 +190,58 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
             }
           },
           [this](pt::DeclRef *expr) -> ast::Expr * {
-            ast::NamedDecl decl = env.resolve(expr);
+            ast::Decl *decl = env.resolve(expr);
 
-            auto **varDecl = std::get_if<ast::VarDecl *>(&decl);
+            spdlog::info("casting {}", fmt::underlying(decl->get_kind()));
+            auto *varDecl = llvm::dyn_cast<ast::VarDecl>(decl);
             if (varDecl == nullptr) {
               spdlog::error("expected variable");
               std::terminate();
             }
 
-            ast::Type *type = (*varDecl)->_type;
+            ast::Type *type = varDecl->_type;
 
-            return ast::DeclRef::Create(*_ast, *varDecl, type);
+            return ast::DeclRef::Create(*_ast, varDecl, type);
           },
+          [this](pt::Block *expr) -> ast::Expr * { return check(*expr); },
           [](auto const & /*expr*/) -> ast::Expr * { assert(false); },
       }  // namespace x::sema
       ,
       expr);
 }
 
-ast::FnDecl *Sema::check(pt::FnDecl *func) {
-  auto [astFn, wasInitialized] = _maps.get(func, true);
-  if (wasInitialized) {
-    return astFn;
-  }
-
+void Sema::declare(ast::FnDecl *ast, pt::FnDecl *pt) {
   std::vector<ast::FnDecl::Param> params;
-  params.reserve(func->_params.size());
+  params.reserve(pt->_params.size());
 
-  for (auto const &[_, type] : func->_params) {
-    ast::NamedDecl decl = env.resolve(type);
-    if (auto *restype = std::get_if<ast::Type *>(&decl); restype != nullptr) {
-      params.push_back(ast::FnDecl::Param(func->name(), *restype));
+  for (auto const &[_, type] : pt->_params) {
+    ast::Decl *decl = env.resolve(type);
+    if (auto *restype = llvm::dyn_cast<ast::Type>(decl)) {
+      params.push_back(ast::FnDecl::Param(pt->name(), restype));
     } else {
       spdlog::error("expected type");
       std::terminate();
     }
   }
-  ast::Block *body = check(*func->_body);
-  ast::NamedDecl retDecl = env.resolve(func->_retTy);
-  auto *type = std::get_if<ast::Type *>(&retDecl);
+
+  ast::Decl *retDecl = env.resolve(pt->_retTy);
+  auto *type = llvm::dyn_cast<ast::Type>(retDecl);
   if (type == nullptr) {
     spdlog::error("expected return type");
     std::terminate();
   }
-  ast::Type *retType = *type;
 
   // assert(body->type() == retType);
 
-  astFn->Create(func->name(), std::move(params), body, retType);
-
-  env.add(astFn);
-
-  return astFn;
+  ast->Create(pt->name(), std::move(params), type);
+  env.add(ast);
+  _ast->_functions.push_back(ast);
 }
 
-// ast::BlockE *Block::validate() {
-//   std::vector<ast::Stmt> body;
-//   body.reserve(_body.size());
-//
-//   for (auto &&stmt : _body) {
-//     body.push_back(stmt.validate());
-//   }
-//
-//   _val = std::make_unique<ast::BlockE>(std::move(body));
-//
-//   return _val.get();
-// }
+void Sema::define(ast::FnDecl *ast, pt::FnDecl *pt) {
+  ast::Block *body = check(*pt->_body);
+
+  ast->define(body);
+}
 
 }  // namespace x::sema

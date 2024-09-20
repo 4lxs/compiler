@@ -15,7 +15,7 @@ class Stmt;
 class Return;
 class VarDecl;
 class Assign;
-using NamedDecl = std::variant<VarDecl *, FnDecl *, Type *>;
+class Decl;
 
 class Expr;
 class IntegerLiteral;

@@ -109,12 +109,12 @@ class FnCall : public Expr, public AllowAlloc<Context, FnCall> {
   friend AllowAlloc;
 
   /// note that the fn needs to be initialized with a return type
-  FnCall(FnDecl* func, StructLiteral* args)
+  FnCall(not_null<FnDecl*> func, not_null<StructLiteral*> args)
       : Expr(SK_Call, func->_ret), _fn(func), _args(args) {}
 
  public:  // TODO: temp
-  FnDecl* _fn;
-  StructLiteral* _args;
+  not_null<FnDecl*> _fn;
+  not_null<StructLiteral*> _args;
 
  public:
   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Call; }

@@ -74,7 +74,7 @@ class Compiler {
       case ast::Stmt::SK_VarDecl: {
         auto* decl = llvm::cast<ast::VarDecl>(stmt);
         llvm::AllocaInst* allocaInst = _builder.CreateAlloca(
-            to_llvm_type(decl->_type), nullptr, decl->_name);
+            to_llvm_type(decl->_type), nullptr, decl->name());
         _allocs.insert({decl, allocaInst});
       } break;
       case ast::Stmt::SK_Assign: {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <map>
 
 #include "x/ast/context.hpp"
@@ -25,7 +24,9 @@ class Sema {
   Ptr<ast::Context> finish();
 
  private:
-  ast::FnDecl* check(pt::FnDecl* func);
+  void declare(ast::FnDecl* ast, pt::FnDecl* pt);
+  void define(ast::FnDecl* ast, pt::FnDecl* pt);
+
   ast::Return* check(pt::Return* stmt);
   ast::VarDecl* check(pt::VarDecl* stmt);
   not_null<ast::Expr*> check(pt::Expr& expr);
@@ -38,72 +39,7 @@ class Sema {
   Ptr<ast::Context> _ast = std::make_unique<ast::Context>();
   pt::Context* _pt;
 
-  Environment env{
-      {Environment::Ident{"i32", _ast->_int32Ty}},
-  };
-
-  /// maps parse tree types to ast types
-  /// note that ast types are allocated in ast::Context and always guaranteed to
-  /// be aligned to 8 bytes. this allows us to store info in lower 3 bits of the
-  /// pointer
-  ///
-  /// last bit is 1 if the type is initialized (that is Create() has been called
-  /// on it)
-  class Mappings {
-    std::map<pt::FnDecl*, ast::FnDecl*> _fnMap;
-
-   public:
-    template <typename T>
-    struct Return {
-      T* astValue;
-
-      /// true if astValue was initialized before call to get
-      bool wasInitialized;
-    };
-
-    Return<ast::FnDecl> get(pt::FnDecl* type, bool initialize = false) {
-      return get(_fnMap, type, initialize);
-    };
-
-    void insert(pt::FnDecl* pt, ast::FnDecl* ast, bool initialize = false) {
-      set(_fnMap, pt, ast, initialize);
-    }
-
-   private:
-    template <typename PtType, typename AstType>
-    Return<AstType> get(std::map<PtType*, AstType*>& map, PtType* type,
-                        bool init) {
-      auto itr = map.find(type);
-      assert(itr != map.end());
-      bool isInitialized = is_init(itr->second);
-      if (init) {
-        itr->second = initialized(itr->second);
-      }
-      return Return<AstType>{
-          .astValue = get_ptr(itr->second),
-          .wasInitialized = isInitialized,
-      };
-    }
-
-    template <typename PtType, typename AstType>
-    void set(std::map<PtType*, AstType*>& map, PtType* pt, AstType* ast,
-             bool init) {
-      map.insert({pt, init ? initialized(ast) : ast});
-    }
-
-    template <typename T>
-    constexpr T* initialized(T* ptr) {
-      return reinterpret_cast<T*>(uintptr_t(ptr) | uintptr_t(1));
-    }
-
-    template <typename T>
-    constexpr T* get_ptr(T* ptr) {
-      return reinterpret_cast<T*>(uintptr_t(ptr) & ~uintptr_t(1));
-    }
-
-    bool is_init(void* ptr) { return (uintptr_t(ptr) & uintptr_t(1)) != 0; }
-  };
-  Mappings _maps;
+  SymbolTable env;
 };
 
 }  // namespace x::sema
