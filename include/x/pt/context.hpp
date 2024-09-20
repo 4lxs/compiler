@@ -2,13 +2,9 @@
 
 #include <llvm/Support/Allocator.h>
 
-#include <map>
-
-#include "spdlog/spdlog.h"
 #include "x/common.hpp"
 #include "x/pt/fwd_decl.hpp"
 #include "x/pt/path.hpp"
-#include "x/pt/type.hpp"
 #include "x/sema/fwd_decl.hpp"
 
 namespace x::pt {
@@ -31,13 +27,6 @@ class Context {
   /// exist
   Module *module(Path &&path);
 
-  /// get stub to any item in any module by it's full path
-  Stub *stub(Path &&path);
-
-  Ptr<Type> _boolTy = std::make_unique<Type>(Type::Kind::Bool);
-  Ptr<Type> _strTy = std::make_unique<Type>(Type::Kind::String);
-  Ptr<Type> _numTy = std::make_unique<Type>(Type::Kind::Number);
-
  private:
   Context() = default;
 
@@ -55,8 +44,7 @@ class Context {
   mutable llvm::BumpPtrAllocator _allocator;
 
   friend sema::Sema;
-
-  std::map<Path, Module *> _modules;
+  std::vector<Module *> _modules;
 };
 
 }  // namespace x::pt

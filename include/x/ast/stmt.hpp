@@ -25,6 +25,7 @@ class Stmt {
     SK_Call,
     SK_Block,
     SK_Builtin,
+    SK_DeclRef,
     SK_ExprEnd,
   };
 
@@ -56,6 +57,8 @@ class VarDecl : public Stmt, public AllowAlloc<Context, VarDecl> {
   friend AllowAlloc;
 
  public:
+  [[nodiscard]] std::string_view name() const { return _name; }
+
   std::string_view _name;
   Type* _type;
 
@@ -86,7 +89,7 @@ class Assign : public Stmt, public AllowAlloc<Context, Assign> {
   }
 };
 
-class Fn : public Stmt, public AllowAlloc<Context, Fn> {
+class FnDecl : public Stmt, public AllowAlloc<Context, FnDecl> {
   friend AllowAlloc;
 
  public:
@@ -98,7 +101,8 @@ class Fn : public Stmt, public AllowAlloc<Context, Fn> {
   [[nodiscard]] std::string_view name() const { return _name; }
 
  private:
-  Fn(std::string_view name, std::vector<Param>&& params, Block* body, Type* ret)
+  FnDecl(std::string_view name, std::vector<Param>&& params, Block* body,
+         Type* ret)
       : Stmt(SK_Function),
         _name{name},
         _params(std::move(params)),

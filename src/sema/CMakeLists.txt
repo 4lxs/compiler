@@ -2,7 +2,7 @@ include(GenerateExportHeader)
 
 set(NAME sema)
 
-add_library(${NAME} sema.cpp)
+add_library(${NAME} sema.cpp environment.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 

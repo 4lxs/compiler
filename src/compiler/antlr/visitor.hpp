@@ -47,7 +47,7 @@ class Visitor : public parser::XBaseVisitor {
   std::vector<pt::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
 
   [[nodiscard]]
-  pt::Stub *get_stub(parser::XParser::PathContext *ctx) const;
+  static pt::Path get_path(parser::XParser::PathContext *ctx);
 
   pt::Context *_ctx;
 

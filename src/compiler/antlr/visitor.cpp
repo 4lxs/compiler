@@ -5,6 +5,7 @@
 
 #include "XParser.h"
 #include "spdlog/spdlog.h"
+#include "x/pt/decl.hpp"
 #include "x/pt/expr.hpp"
 #include "x/pt/module.hpp"
 
@@ -28,16 +29,15 @@ std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
 }
 
 std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
-  pt::Type* retType =
-      ctx->ret != nullptr ? get_stub(ctx->ret)->use_type() : nullptr;
-
-  pt::FnProto prototype{parse_params(ctx->params()), retType};
-
-  pt::Stub* stub = _module->get_stub(ctx->name->getText());
-
   visitBlock(ctx->block());
+  auto* body = std::get<pt::Block*>(_stack.pop());
 
-  stub->function(std::move(prototype), std::get<pt::Block*>(_stack.pop()));
+  auto* retType = pt::DeclRef::Create(*_ctx, get_path(ctx->ret));
+
+  auto* func = pt::FnDecl::Create(*_ctx, ctx->name->getText(),
+                                  parse_params(ctx->params()), retType, body);
+
+  _module->define(func);
 
   return {};
 }
@@ -47,25 +47,25 @@ std::any Visitor::visitReturn(parser::XParser::ReturnContext* ctx) {
 
   auto* retVal = ctx->expr();
   if (retVal == nullptr) {
-    _block->add(pt::RetStmt::Create(*_ctx, std::nullopt));
+    _block->add(pt::Return::Create(*_ctx, std::nullopt));
   } else {
     visit(retVal);
 
-    _block->add(pt::RetStmt::Create(*_ctx, _stack.pop()));
+    _block->add(pt::Return::Create(*_ctx, _stack.pop()));
   }
 
   return {};
 }
 
 std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
-  visitAnonStruct(ctx->anonStruct());
-
   assert(_block != nullptr);
 
-  auto* args = std::get<pt::StructExpr*>(_stack.pop());
-  pt::Fn* func = get_stub(ctx->fn)->function(*args);
+  auto* fnVar = pt::DeclRef::Create(*_ctx, get_path(ctx->fn));
 
-  _stack.push(pt::Call::Create(*_ctx, func, args));
+  visitAnonStruct(ctx->anonStruct());
+  auto* args = std::get<pt::StructExpr*>(_stack.pop());
+
+  _stack.push(pt::Call::Create(*_ctx, fnVar, args));
 
   return {};
 }
@@ -185,18 +185,23 @@ std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
 std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
   std::string name = ctx->name->getText();
 
-  pt::Stub* stub = _module->get_stub(std::move(name));
+  std::optional<pt::Expr> val;
 
-  assert(ctx->val);
-  visit(ctx->val);
+  if (ctx->val != nullptr) {
+    visit(ctx->val);
+    val = _stack.pop();
+  }
 
-  _block->add(pt::VarDef::Create(*_ctx, stub, _stack.pop()));
+  auto* type = pt::DeclRef::Create(*_ctx, get_path(ctx->type));
+
+  _block->add(pt::VarDecl::Create(*_ctx, std::move(name), type, val));
 
   return {};
 }
 
 std::any Visitor::visitVarE(parser::XParser::VarEContext* ctx) {
-  // pt::Stub* stub = get_stub(ctx->path());
+  assert(ctx->path() != nullptr);
+  _stack.push(pt::DeclRef::Create(*_ctx, get_path(ctx->path())));
 
   return {};
 }
@@ -210,13 +215,14 @@ std::vector<pt::FnParam> Visitor::parse_params(
   std::vector<pt::FnParam> params;
   params.reserve(names.size());
   for (auto&& [name, type] : std::views::zip(names, types)) {
-    params.emplace_back(name->getText(), get_stub(type)->use_type());
+    auto* typeref = pt::DeclRef::Create(*_ctx, get_path(type));
+    params.emplace_back(name->getText(), typeref);
   }
 
   return params;
 }
 
-pt::Stub* Visitor::get_stub(parser::XParser::PathContext* ctx) const {
+pt::Path Visitor::get_path(parser::XParser::PathContext* ctx) {
   std::vector<std::string> components;
 
   for (auto* ident : ctx->Ident()) {
@@ -226,7 +232,7 @@ pt::Stub* Visitor::get_stub(parser::XParser::PathContext* ctx) const {
   bool external = ctx->initSep != nullptr;
   spdlog::info("external? {}", external);
 
-  return _module->get_stub(pt::Path{std::move(components), external});
+  return pt::Path{std::move(components), external};
 }
 
 pt::Expr Visitor::Stack_::pop() {

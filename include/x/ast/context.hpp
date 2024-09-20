@@ -17,7 +17,6 @@ class Context {
 
  public:
   // builtin types
-  not_null<Type *> _strTy;
   not_null<Type *> _int32Ty;
   not_null<Type *> _int64Ty;
   not_null<Type *> _boolTy;
@@ -33,7 +32,7 @@ class Context {
  private:
  public:  // TODO: temp
   friend class sema::Sema;
-  std::vector<Fn *> _functions;
+  std::vector<FnDecl *> _functions;
   std::vector<Type *> _types;
 
  public:  // TODO: friend doesn't work

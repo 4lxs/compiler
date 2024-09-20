@@ -60,6 +60,7 @@ class Compiler {
       case ast::Stmt::SK_Struct:
       case ast::Stmt::SK_If:
       case ast::Stmt::SK_Call:
+      case ast::Stmt::SK_DeclRef:
       case ast::Stmt::SK_Block:
         eval(*stmt);
         break;
@@ -174,22 +175,31 @@ class Compiler {
         auto const& builtin = llvm::cast<ast::Builtin>(expr);
         switch (builtin._op) {
           case ast::Builtin::Op::iAdd:
-            return _builder.CreateAdd(eval(*builtin._args[0]),
-                                      eval(*builtin._args[1]));
+            spdlog::info("iAdd");
+            builtin._args.at(0)->type()->prettyPrint();
+            builtin._args.at(1)->type()->prettyPrint();
+            return _builder.CreateAdd(eval(*builtin._args.at(0)),
+                                      eval(*builtin._args.at(1)));
           case ast::Builtin::Op::iLess:
-            return _builder.CreateICmpULT(eval(*builtin._args[0]),
-                                          eval(*builtin._args[1]));
+            return _builder.CreateICmpULT(eval(*builtin._args.at(0)),
+                                          eval(*builtin._args.at(1)));
           case ast::Builtin::Op::Start2:
           case ast::Builtin::Op::Start3:
             std::unreachable();
         }
+      } break;
+      case ast::Stmt::SK_DeclRef: {
+        auto const& declRef = llvm::cast<ast::DeclRef>(expr);
+        llvm::AllocaInst* allocaInst = _allocs.at(declRef._decl);
+        return _builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst,
+                                   declRef._decl->name());
       } break;
       default:
         std::unreachable();
     }
   }
 
-  llvm::Function* function(ast::Fn const& proto) {
+  llvm::Function* function(ast::FnDecl const& proto) {
     spdlog::info("function {}({})", proto.name(), proto._params.size());
     std::vector<llvm::Type*> argTypes{};
     argTypes.reserve(proto._params.size());

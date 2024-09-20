@@ -23,7 +23,7 @@ staticDef
     ;
 
 varDef
-    : Let name=Ident Cln type=path? (Eq val=expr)?
+    : Let name=Ident Cln type=path (Eq val=expr)?
     ;
 
 typeDef
@@ -68,7 +68,7 @@ expr
     | (True | False) #boolPE
 
     | fn=path arg=anonStruct #callE
-    | name=path #varE
+    | path #varE
     | anonStruct #structE
 	| left=expr bop=( Star | Slash ) right=expr #binaryE
 	| left=expr bop=( Plus | Minus ) right=expr #binaryE

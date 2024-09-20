@@ -2,15 +2,12 @@
 
 #include <variant>
 
-#include "x/common.hpp"
 namespace x::pt {
 
 class Context;
 class Module;
 
-class Stub;
 struct Path;
-class Type;
 
 class VarExpr;
 class StructExpr;
@@ -21,14 +18,18 @@ class ParenExpr;
 class StructExpr;
 class Call;
 class Block;
+class DeclRef;
 using Expr = std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*,
-                          StructExpr*, Call*, Block*, VarExpr*>;
+                          StructExpr*, Call*, Block*, VarExpr*, DeclRef*>;
 
-class Fn;
 struct FnParam;
+class FnDecl;
+class VarDecl;
+class TypeDecl;
+using ValueDecl = std::variant<FnDecl*, VarDecl*>;
+using TopLevelDecl = std::variant<FnDecl*>;
 
-class RetStmt;
-class VarDef;
-using Stmt = std::variant<Expr, RetStmt*, VarDef*>;
+class Return;
+using Stmt = std::variant<Expr, Return*, VarDecl*>;
 
 }  // namespace x::pt

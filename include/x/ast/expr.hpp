@@ -6,11 +6,11 @@
 #include <vector>
 
 #include "fwd_decl.hpp"
-#include "spdlog/spdlog.h"
 #include "x/ast/context.hpp"
 #include "x/ast/stmt.hpp"
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
+#include "x/pt/decl.hpp"
 
 namespace x::ast {
 
@@ -109,11 +109,11 @@ class FnCall : public Expr, public AllowAlloc<Context, FnCall> {
   friend AllowAlloc;
 
   /// note that the fn needs to be initialized with a return type
-  FnCall(Fn* func, StructLiteral* args)
+  FnCall(FnDecl* func, StructLiteral* args)
       : Expr(SK_Call, func->_ret), _fn(func), _args(args) {}
 
  public:  // TODO: temp
-  Fn* _fn;
+  FnDecl* _fn;
   StructLiteral* _args;
 
  public:
@@ -179,6 +179,21 @@ class Builtin : public Expr, public AllowAlloc<Context, Builtin> {
  public:
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_Builtin;
+  }
+};
+
+class DeclRef : public Expr, public AllowAlloc<Context, DeclRef> {
+ public:
+  VarDecl* _decl;
+
+ private:
+  friend AllowAlloc;
+  explicit DeclRef(VarDecl* decl, Type* type)
+      : Expr(SK_DeclRef, type), _decl(decl) {}
+
+ public:
+  static bool classof(Stmt const* expr) {
+    return expr->get_kind() == SK_DeclRef;
   }
 };
 

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <string_view>
+
 #include "fwd_decl.hpp"
 #include "spdlog/spdlog.h"
-#include "x/pt/fwd_decl.hpp"
+#include "x/common.hpp"
 
 namespace x::ast {
 
@@ -10,6 +12,8 @@ class Type : public AllowAlloc<Context, Type> {
   friend AllowAlloc;
 
  public:
+  [[nodiscard]] std::string_view name() const;
+
   enum class Kind {
     Bool,
     String,
@@ -17,9 +21,9 @@ class Type : public AllowAlloc<Context, Type> {
     I64,
     Void,
   } _kind;
-  int i;
 
   void prettyPrint() const {
+    spdlog::info("name: {}", _name);
     switch (_kind) {
       case Kind::Bool:
         spdlog::info("bool");
@@ -39,8 +43,10 @@ class Type : public AllowAlloc<Context, Type> {
     }
   }
 
+  std::string_view _name;
+
  private:
-  explicit Type(Kind kind) : _kind(kind) {};
+  explicit Type(Kind kind, std::string_view name) : _kind(kind), _name(name) {};
 };
 
 }  // namespace x::ast

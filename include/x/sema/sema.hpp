@@ -1,15 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <map>
 
 #include "x/ast/context.hpp"
 #include "x/ast/fwd_decl.hpp"
-#include "x/ast/stmt.hpp"
-#include "x/ast/type.hpp"
 #include "x/common.hpp"
-#include "x/pt/context.hpp"
 #include "x/pt/fwd_decl.hpp"
-#include "x/pt/type.hpp"
+#include "x/sema/environment.hpp"
 
 namespace x::sema {
 
@@ -27,10 +25,9 @@ class Sema {
   Ptr<ast::Context> finish();
 
  private:
-  ast::Fn* check(pt::Fn* func);
-  ast::Type* check(pt::Type* type);
-  ast::Return* check(pt::RetStmt* stmt);
-  ast::VarDecl* check(pt::VarDef* stmt);
+  ast::FnDecl* check(pt::FnDecl* func);
+  ast::Return* check(pt::Return* stmt);
+  ast::VarDecl* check(pt::VarDecl* stmt);
   not_null<ast::Expr*> check(pt::Expr& expr);
 
   ast::Block* check(pt::Block& block);
@@ -41,6 +38,10 @@ class Sema {
   Ptr<ast::Context> _ast = std::make_unique<ast::Context>();
   pt::Context* _pt;
 
+  Environment env{
+      {Environment::Ident{"i32", _ast->_int32Ty}},
+  };
+
   /// maps parse tree types to ast types
   /// note that ast types are allocated in ast::Context and always guaranteed to
   /// be aligned to 8 bytes. this allows us to store info in lower 3 bits of the
@@ -49,18 +50,9 @@ class Sema {
   /// last bit is 1 if the type is initialized (that is Create() has been called
   /// on it)
   class Mappings {
-    std::map<pt::Type*, ast::Type*> _typeMap;
-    std::map<pt::Fn*, ast::Fn*> _fnMap;
+    std::map<pt::FnDecl*, ast::FnDecl*> _fnMap;
 
    public:
-    explicit Mappings(std::map<pt::Type*, ast::Type*> typeMap)
-        : _typeMap(std::move(typeMap)) {
-      for (auto& [pt, ast] : _typeMap) {
-        spdlog::info("initializing {} to {}", fmt::ptr(pt), fmt::ptr(ast));
-        ast = initialized(ast);
-      }
-    }
-
     template <typename T>
     struct Return {
       T* astValue;
@@ -69,19 +61,11 @@ class Sema {
       bool wasInitialized;
     };
 
-    Return<ast::Fn> get(pt::Fn* type, bool initialize = false) {
+    Return<ast::FnDecl> get(pt::FnDecl* type, bool initialize = false) {
       return get(_fnMap, type, initialize);
     };
 
-    Return<ast::Type> get(pt::Type* type, bool initialize = false) {
-      return get(_typeMap, type, initialize);
-    };
-
-    void insert(pt::Type* pt, ast::Type* ast, bool initialize = false) {
-      set(_typeMap, pt, ast, initialize);
-    }
-
-    void insert(pt::Fn* pt, ast::Fn* ast, bool initialize = false) {
+    void insert(pt::FnDecl* pt, ast::FnDecl* ast, bool initialize = false) {
       set(_fnMap, pt, ast, initialize);
     }
 
@@ -119,11 +103,7 @@ class Sema {
 
     bool is_init(void* ptr) { return (uintptr_t(ptr) & uintptr_t(1)) != 0; }
   };
-  Mappings _maps{std::map<pt::Type*, ast::Type*>{
-      {_pt->_strTy.get(), _ast->_strTy},
-      {_pt->_numTy.get(), _ast->_int32Ty},
-      {_pt->_boolTy.get(), _ast->_boolTy},
-  }};
+  Mappings _maps;
 };
 
 }  // namespace x::sema

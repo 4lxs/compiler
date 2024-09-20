@@ -9,7 +9,7 @@ add_library(
   expr.cpp
   module.cpp
   stmt.cpp
-  type.cpp)
+  path.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 

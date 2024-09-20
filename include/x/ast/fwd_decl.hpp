@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <variant>
 
 namespace x::ast {
 
@@ -8,12 +9,13 @@ class Context;
 
 class Type;
 
-class Fn;
+class FnDecl;
 
 class Stmt;
 class Return;
 class VarDecl;
 class Assign;
+using NamedDecl = std::variant<VarDecl *, FnDecl *, Type *>;
 
 class Expr;
 class IntegerLiteral;
@@ -23,6 +25,7 @@ class StructLiteral;
 class FnCall;
 class Block;
 class If;
+class DeclRef;
 
 }  // namespace x::ast
 

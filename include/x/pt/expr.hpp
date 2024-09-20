@@ -5,6 +5,7 @@
 #include "x/common.hpp"
 #include "x/pt/block.hpp"
 #include "x/pt/fwd_decl.hpp"
+#include "x/pt/path.hpp"
 
 namespace x::pt {
 
@@ -76,14 +77,23 @@ class ParenExpr : public AllowAlloc<Context, ParenExpr> {
   explicit ParenExpr(Expr inner) : inner(inner) {}
 };
 
+class DeclRef : public AllowAlloc<Context, DeclRef> {
+ public:
+  Path _var;
+
+ private:
+  friend AllowAlloc;
+  explicit DeclRef(Path &&path) : _var(std::move(path)) {}
+};
+
 class Call : public AllowAlloc<Context, Call> {
  public:
-  Fn *fn;
+  DeclRef *fn;
   not_null<StructExpr *> args;
 
  private:
   friend AllowAlloc;
-  Call(Fn *func, not_null<StructExpr *> args) : fn(func), args(args) {}
+  Call(DeclRef *func, not_null<StructExpr *> args) : fn(func), args(args) {}
 };
 
 struct Field {

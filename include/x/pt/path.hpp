@@ -4,13 +4,14 @@
 #include <vector>
 
 #include "fwd_decl.hpp"
+#include "x/common.hpp"
 
 namespace x::pt {
 
-struct Path {
+struct Path : public AllowAlloc<Context, Path> {
  public:
-  /// @param external: ::a::b true, a::b false
-  /// @param module: {"a", "b"} in both cases
+  /// @param external ::a::b true, a::b false
+  /// @param module {"a", "b"} in both cases
   explicit Path(std::vector<std::string> &&components, bool external = false);
 
   /// path external to this project. in x they

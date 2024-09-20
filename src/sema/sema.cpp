@@ -6,18 +6,20 @@
 
 #include "x/ast/context.hpp"
 #include "x/ast/expr.hpp"
+#include "x/ast/fwd_decl.hpp"
 #include "x/ast/stmt.hpp"
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
 #include "x/pt/context.hpp"
+#include "x/pt/decl.hpp"
 #include "x/pt/expr.hpp"
 #include "x/pt/module.hpp"
-#include "x/pt/type.hpp"
+#include "x/pt/stmt.hpp"
 
 namespace x::sema {
 
 Sema::Sema(pt::Context *ctx) : _pt(ctx) {
-  for (auto const &[_, module] : ctx->_modules) {
+  for (auto const &module : ctx->_modules) {
     add(*module);
   }
 }
@@ -28,39 +30,29 @@ void Sema::add(pt::Module const &module) {
   // first validate all stubs.  that is to allow stubs to cross-link. e.g. fn
   // val stub needs pointer to return type stub
 
-  for (auto const &[_, stub] : module._items) {
-    spdlog::info("validating: {}", stub->_name);
-    if (stub->_holder.index() == 0) {
-      spdlog::error("validating undefined stub");
-      std::terminate();
-    }
-
-    std::visit(overloaded{
-                   [](std::monostate) {
-                     spdlog::error("undefined item");
-                     std::terminate();
-                   },
-                   [&, this](pt::Fn *func) {
-                     ast::Fn *newfn = ast::Fn::Allocate(*_ast);
-                     _ast->_functions.push_back(newfn);
-                     _maps.insert(func, newfn);
-                   },
-                   [&, this](pt::Type *const &type) {
-                     // ast::Type *newtype = ast::Type::Allocate(*_ast);
-                     // _ast->_types.push_back(newtype);
-                     // _maps.insert(type, newtype);
-                   },
-               },
-               stub->_holder);
+  for (pt::TopLevelDecl const &decl : module._items) {
+    std::visit(
+        overloaded{
+            [&, this](pt::FnDecl *func) {
+              ast::FnDecl *newfn = ast::FnDecl::Allocate(*_ast);
+              _ast->_functions.push_back(newfn);
+              _maps.insert(func, newfn);
+            },
+            // [&, this](pt::Type *const &type) {
+            //   // ast::Type *newtype = ast::Type::Allocate(*_ast);
+            //   // _ast->_types.push_back(newtype);
+            //   // _maps.insert(type, newtype);
+            // },
+        },
+        decl);
   }
 
-  for (auto const &[_, stub] : module._items) {
-    spdlog::info("adding: {}", stub->_name);
-    std::visit(overloaded{[this](auto *item) { check(item); },
-                          [](std::monostate) { std::terminate(); }
-
-               },
-               stub->_holder);
+  for (auto const &stub : module._items) {
+    std::visit(
+        overloaded{
+            [this](auto *item) { check(item); },
+        },
+        stub);
   }
 }
 
@@ -71,12 +63,22 @@ ast::Block *Sema::check(pt::Block &block) {
                    [this, &body](auto stmt) {
                      body.push_back(static_cast<ast::Stmt *>(check(stmt)));
                    },
-                   [this, &body](pt::VarDef *stmt) {
-                     ast::Expr *val = check(stmt->_val);
-                     auto *decl = ast::VarDecl::Create(
-                         *_ast, stmt->_stub->name(), val->type());
-                     auto *assign = ast::Assign::Create(*_ast, decl, val);
+                   [this, &body](pt::VarDecl *stmt) {
+                     ast::NamedDecl typedecl = env.resolve(stmt->_type);
+                     auto *type = std::get_if<ast::Type *>(&typedecl);
+                     if (type == nullptr) {
+                       spdlog::error("expected type");
+                       std::terminate();
+                     }
+                     auto *decl =
+                         ast::VarDecl::Create(*_ast, stmt->_name, *type);
                      body.push_back(decl);
+                     env.add(decl);
+                     if (!stmt->_val.has_value()) {
+                       return;
+                     }
+                     ast::Expr *val = check(*stmt->_val);
+                     auto *assign = ast::Assign::Create(*_ast, decl, val);
                      body.push_back(assign);
                    },
                    [this, &body](pt::Expr &stmt) {
@@ -103,24 +105,7 @@ ast::StructLiteral *Sema::check(pt::StructExpr &expr) {
   return ast::StructLiteral::Create(*_ast, std::move(fields));
 }
 
-ast::Type *Sema::check(pt::Type *type) {
-  if (type == nullptr) {
-    return _ast->_voidTy;
-  }
-
-  auto [astType, wasInitialized] = _maps.get(type, true);
-  spdlog::info("initialized {}? {}", fmt::ptr(astType), wasInitialized);
-  if (wasInitialized) {
-    return astType;
-  }
-
-  assert(false);
-  astType->Create(ast::Type::Kind::I32);
-
-  return astType;
-}
-
-ast::Return *Sema::check(pt::RetStmt *stmt) {
+ast::Return *Sema::check(pt::Return *stmt) {
   ast::Expr *retVal = stmt->_retVal.has_value() ? check(stmt->_retVal.value())
                                                 : _ast->_voidExpr;
 
@@ -134,8 +119,12 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
             return ast::IntegerLiteral::Int32(*_ast, expr->_val);
           },
           [this](pt::Call *const &expr) -> ast::Expr * {
-            return ast::FnCall::Create(*_ast, check(expr->fn),
-                                       check(*expr->args));
+            ast::NamedDecl decl = env.resolve(expr->fn);
+            if (auto *func = std::get_if<ast::FnDecl *>(&decl)) {
+              return ast::FnCall::Create(*_ast, *func, check(*expr->args));
+            }
+            spdlog::error("cannot call non-function");
+            std::terminate();
           },
           [this](pt::IfExpr *const &expr) -> ast::Expr * {
             not_null<ast::Expr *> cond = check(expr->cond);
@@ -173,29 +162,57 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
                                             _ast->_boolTy);
             }
           },
+          [this](pt::DeclRef *expr) -> ast::Expr * {
+            ast::NamedDecl decl = env.resolve(expr);
+
+            auto **varDecl = std::get_if<ast::VarDecl *>(&decl);
+            if (varDecl == nullptr) {
+              spdlog::error("expected variable");
+              std::terminate();
+            }
+
+            ast::Type *type = (*varDecl)->_type;
+
+            return ast::DeclRef::Create(*_ast, *varDecl, type);
+          },
           [](auto const & /*expr*/) -> ast::Expr * { assert(false); },
-      },
+      }  // namespace x::sema
+      ,
       expr);
 }
 
-ast::Fn *Sema::check(pt::Fn *func) {
+ast::FnDecl *Sema::check(pt::FnDecl *func) {
   auto [astFn, wasInitialized] = _maps.get(func, true);
   if (wasInitialized) {
     return astFn;
   }
 
-  std::vector<ast::Fn::Param> params;
-  params.reserve(func->_proto.params.size());
+  std::vector<ast::FnDecl::Param> params;
+  params.reserve(func->_params.size());
 
-  for (auto const &[_, type] : func->_proto.params) {
-    params.push_back(ast::Fn::Param(func->name(), check(type)));
+  for (auto const &[_, type] : func->_params) {
+    ast::NamedDecl decl = env.resolve(type);
+    if (auto *restype = std::get_if<ast::Type *>(&decl); restype != nullptr) {
+      params.push_back(ast::FnDecl::Param(func->name(), *restype));
+    } else {
+      spdlog::error("expected type");
+      std::terminate();
+    }
   }
   ast::Block *body = check(*func->_body);
-  ast::Type *retType = check(func->_proto.ret);
+  ast::NamedDecl retDecl = env.resolve(func->_retTy);
+  auto *type = std::get_if<ast::Type *>(&retDecl);
+  if (type == nullptr) {
+    spdlog::error("expected return type");
+    std::terminate();
+  }
+  ast::Type *retType = *type;
 
-  assert(body->type() != retType);
+  // assert(body->type() == retType);
 
   astFn->Create(func->name(), std::move(params), body, retType);
+
+  env.add(astFn);
 
   return astFn;
 }
