@@ -152,10 +152,18 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
                 return ast::Builtin::Create(*_ast, ast::Builtin::Op::iAdd,
                                             std::vector{lhs, rhs}, lhs->type());
               case pt::BinaryExpr::Operator::Minus:
+                return ast::Builtin::Create(*_ast, ast::Builtin::Op::iSub,
+                                            std::vector{lhs, rhs}, lhs->type());
               case pt::BinaryExpr::Operator::Star:
+                return ast::Builtin::Create(*_ast, ast::Builtin::Op::iMul,
+                                            std::vector{lhs, rhs}, lhs->type());
               case pt::BinaryExpr::Operator::Slash:
+                return ast::Builtin::Create(*_ast, ast::Builtin::Op::iDiv,
+                                            std::vector{lhs, rhs}, lhs->type());
               case pt::BinaryExpr::Operator::Greater:
-                assert(false);
+                return ast::Builtin::Create(*_ast, ast::Builtin::Op::iGreater,
+                                            std::vector{lhs, rhs},
+                                            _ast->_boolTy);
               case pt::BinaryExpr::Operator::Less:
                 return ast::Builtin::Create(*_ast, ast::Builtin::Op::iLess,
                                             std::vector{lhs, rhs},

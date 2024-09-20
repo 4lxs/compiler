@@ -186,6 +186,18 @@ class Compiler {
           case ast::Builtin::Op::Start2:
           case ast::Builtin::Op::Start3:
             std::unreachable();
+          case ast::Builtin::Op::iSub:
+            return _builder.CreateSub(eval(*builtin._args.at(0)),
+                                      eval(*builtin._args.at(1)));
+          case ast::Builtin::Op::iMul:
+            return _builder.CreateMul(eval(*builtin._args.at(0)),
+                                      eval(*builtin._args.at(1)));
+          case ast::Builtin::Op::iDiv:
+            return _builder.CreateUDiv(eval(*builtin._args.at(0)),
+                                       eval(*builtin._args.at(1)));
+          case ast::Builtin::Op::iGreater:
+            return _builder.CreateICmpUGT(eval(*builtin._args.at(0)),
+                                          eval(*builtin._args.at(1)));
         }
       } break;
       case ast::Stmt::SK_DeclRef: {

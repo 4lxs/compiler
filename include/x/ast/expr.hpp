@@ -164,7 +164,11 @@ class Builtin : public Expr, public AllowAlloc<Context, Builtin> {
   enum class Op {
     Start2,  // 2 argument operations
     iAdd,
+    iSub,
+    iMul,
+    iDiv,
     iLess,
+    iGreater,
     Start3,
   };
 
