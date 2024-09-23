@@ -16,22 +16,24 @@ class Decl {
     Fn,
     Var,
     Field,
-
-    TypeBegin,
-    LiteralTy,
-    StructTy,
-    TypeEnd,
   };
 
   [[nodiscard]] DeclKind get_kind() const { return _kind; }
 
   [[nodiscard]] std::string_view name() const { return _name; }
 
+  [[nodiscard]] not_null<Type*> type() const {
+    assert(_type != nullptr);
+    return _type;
+  }
+
  protected:
-  explicit Decl(DeclKind kind, std::string_view name)
-      : _name(name), _kind(kind) {}
+  explicit Decl(DeclKind kind, std::string_view name, Type* type)
+      : _name(name), _type(type), _kind(kind) {}
 
   std::string_view _name;
+
+  Type* _type;
 
  private:
   DeclKind _kind;
@@ -57,7 +59,7 @@ class FnDecl : public Stmt, public Decl, public AllowAlloc<Context, FnDecl> {
   FnDecl(std::string_view name, std::vector<Param>&& params,
          not_null<Type*> ret)
       : Stmt(SK_Function),
-        Decl(DeclKind::Fn, name),
+        Decl(DeclKind::Fn, name, nullptr /* TODO */),
         _params(std::move(params)),
         _ret(ret) {}
 
@@ -82,12 +84,9 @@ class FnDecl : public Stmt, public Decl, public AllowAlloc<Context, FnDecl> {
 class VarDecl : public Stmt, public Decl, public AllowAlloc<Context, VarDecl> {
   friend AllowAlloc;
 
- public:
-  Type* _type;
-
  private:
   explicit VarDecl(std::string_view name, Type* type)
-      : Stmt(StmtKind::SK_VarDecl), Decl(DeclKind::Var, name), _type(type) {}
+      : Stmt(StmtKind::SK_VarDecl), Decl(DeclKind::Var, name, type) {}
 
  public:
   static bool classof(Stmt const* expr) {
@@ -107,15 +106,13 @@ class VarDecl : public Stmt, public Decl, public AllowAlloc<Context, VarDecl> {
 
 class FieldDecl : public Decl, public AllowAlloc<Context, FieldDecl> {
  public:
-  not_null<Type*> _type;
-
   /// index of field in struct
   uint8_t _index;
 
  private:
   friend AllowAlloc;
   FieldDecl(std::string_view name, not_null<Type*> type, uint8_t index)
-      : Decl(DeclKind::Field, name), _type(type), _index(index) {}
+      : Decl(DeclKind::Field, name, type), _index(index) {}
 
  public:
   static bool classof(Decl const* decl) {

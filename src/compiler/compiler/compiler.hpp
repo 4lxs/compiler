@@ -50,6 +50,10 @@ class Compiler {
     context._voidTy->_llvmType = llvm::Type::getVoidTy(_ctx);
     context._boolTy->_llvmType = llvm::Type::getInt1Ty(_ctx);
 
+    for (auto const& struc : context._structs) {
+      to_llvm_type(struc);
+    }
+
     for (auto const& fnctn : context._functions) {
       spdlog::info("compiling function {} with name {}", fmt::ptr(fnctn),
                    fnctn->name());
@@ -107,7 +111,7 @@ class Compiler {
       case ast::Stmt::SK_VarDecl: {
         auto* decl = llvm::cast<ast::VarDecl>(stmt);
         llvm::AllocaInst* allocaInst = _builder.CreateAlloca(
-            to_llvm_type(decl->_type), nullptr, decl->name());
+            decl->type()->_llvmType, nullptr, decl->name());
         decl->_alloca = allocaInst;
       } break;
       case ast::Stmt::SK_Assign: {
@@ -247,9 +251,9 @@ class Compiler {
         assert(base.isPtr());
 
         llvm::Value* ptr = _builder.CreateStructGEP(
-            to_llvm_type(fieldAccess->_base->type()), base._llvmV, 0);
+            fieldAccess->_base->type()->_llvmType, base._llvmV, 0);
 
-        return Value{ptr, to_llvm_type(fieldAccess->type())};
+        return Value{ptr, fieldAccess->type()->_llvmType};
       }
       case ast::Stmt::SK_Return:
       case ast::Stmt::SK_Function:
@@ -266,11 +270,11 @@ class Compiler {
     std::vector<llvm::Type*> argTypes{};
     argTypes.reserve(proto._params.size());
     for (auto const& prm : proto._params) {
-      argTypes.push_back(to_llvm_type(prm.type));
+      argTypes.push_back(prm.type->_llvmType);
     }
 
     auto* funcType = llvm::FunctionType::get(proto._ret != nullptr
-                                                 ? to_llvm_type(proto._ret)
+                                                 ? proto._ret->_llvmType
                                                  : llvm::Type::getVoidTy(_ctx),
                                              argTypes, false);
     auto* func = llvm::Function::Create(
@@ -292,7 +296,7 @@ class Compiler {
     }
 
     switch (type->get_kind()) {
-      case ast::Decl::DeclKind::StructTy: {
+      case ast::Type::TypeKind::Struct: {
         auto* structTy = llvm::cast<ast::StructTy>(type);
         // structTy->_fields
 
@@ -300,23 +304,16 @@ class Compiler {
         fields.reserve(structTy->_fields.size());
 
         for (ast::FieldDecl* const& field : structTy->_fields) {
-          fields.push_back(to_llvm_type(field->_type));
+          fields.push_back(to_llvm_type(field->type()));
         }
         type->_llvmType =
             llvm::StructType::create(_ctx, fields, structTy->name());
 
         return type->_llvmType;
       }
-      case ast::Decl::DeclKind::LiteralTy:
-        // all literal types are created in compile()
-      case ast::Decl::DeclKind::TypeBegin:
-      case ast::Decl::DeclKind::Fn:
-      case ast::Decl::DeclKind::Var:
-      case ast::Decl::DeclKind::Field:
-      case ast::Decl::DeclKind::TypeEnd:
-        std::unreachable();
+      case ast::Type::TypeKind::Literal:
+        throw std::runtime_error("literal types should have been created");
     }
-    return llvm::Type::getInt32Ty(_ctx);
   }
 
   // private:

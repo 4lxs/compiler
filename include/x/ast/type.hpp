@@ -11,21 +11,31 @@
 
 namespace x::ast {
 
-class Type : public Decl {
- protected:
-  explicit Type(DeclKind kind, std::string_view name) : Decl(kind, name) {};
-
+class Type {
  public:
-  static bool classof(Decl const* decl) {
-    return decl->get_kind() > DeclKind::TypeBegin &&
-           decl->get_kind() < DeclKind::TypeEnd;
-  }
+  enum class TypeKind {
+    Literal,
+    Struct,
+  };
+
+  [[nodiscard]] std::string_view name() const { return _name; }
+
+  [[nodiscard]] TypeKind get_kind() const { return _kind; }
+
+ protected:
+  explicit Type(TypeKind kind, std::string_view name)
+      : _name(name), _kind(kind) {};
+
+ private:
+  std::string_view _name;
+  TypeKind _kind;
 
   //===
   // compiler data
   //===
 
-  llvm::Type* _llvmType;
+ public:
+  llvm::Type* _llvmType{};
 };
 
 class LiteralTy : public Type, public AllowAlloc<Context, LiteralTy> {
@@ -40,34 +50,13 @@ class LiteralTy : public Type, public AllowAlloc<Context, LiteralTy> {
     Void,
   } _kind;
 
-  void prettyPrint() const {
-    spdlog::info("name: {}", _name);
-    switch (_kind) {
-      case Kind::Bool:
-        spdlog::info("bool");
-        break;
-      case Kind::String:
-        spdlog::info("string");
-        break;
-      case Kind::I32:
-        spdlog::info("i32");
-        break;
-      case Kind::I64:
-        spdlog::info("i64");
-        break;
-      case Kind::Void:
-        spdlog::info("void");
-        break;
-    }
-  }
-
  private:
-  explicit LiteralTy(Kind kind, std::string_view name)
-      : Type(DeclKind::LiteralTy, name), _kind(kind) {};
+  LiteralTy(Kind kind, std::string_view name)
+      : Type(TypeKind::Literal, name), _kind(kind) {};
 
  public:
-  static bool classof(Decl const* decl) {
-    return decl->get_kind() == DeclKind::LiteralTy;
+  static bool classof(Type const* type) {
+    return type->get_kind() == TypeKind::Literal;
   }
 };
 
@@ -75,13 +64,13 @@ class StructTy : public Type, public AllowAlloc<Context, StructTy> {
  public:
   void define(std::vector<FieldDecl*>&& fields) { _fields = std::move(fields); }
 
-  not_null<FieldDecl*> get_field(std::string_view name) {
+  not_null<FieldDecl*> get_field(std::string_view field_name) {
     for (FieldDecl* field : _fields) {
-      if (field->name() == name) {
+      if (field->name() == field_name) {
         return field;
       }
     }
-    spdlog::error("field '{}' not found in '{}'", name, _name);
+    spdlog::error("field '{}' not found in '{}'", field_name, name());
     std::terminate();
   }
 
@@ -90,7 +79,12 @@ class StructTy : public Type, public AllowAlloc<Context, StructTy> {
 
  private:
   friend AllowAlloc;
-  explicit StructTy(std::string_view name) : Type(DeclKind::StructTy, name) {};
+  explicit StructTy(std::string_view name) : Type(TypeKind::Struct, name) {};
+
+ public:
+  static bool classof(Type const* type) {
+    return type->get_kind() == TypeKind::Struct;
+  }
 };
 
 }  // namespace x::ast

@@ -22,7 +22,7 @@
 namespace x::sema {
 
 Sema::Sema(pt::Context *ctx) : _pt(ctx) {
-  env.add_decl(_ast->_int32Ty);
+  env.add_type(_ast->_int32Ty);
 
   for (auto const &module : ctx->_modules) {
     add(*module);
@@ -33,7 +33,6 @@ Ptr<ast::Context> Sema::finish() { return std::move(_ast); }
 
 void Sema::add(pt::Module const &module) {
   std::vector<std::pair<pt::FnDecl *, ast::FnDecl *>> functions;
-  // std::vector<std::pair<pt::TypeDecl *, ast::Type *>> types;
   std::vector<std::pair<pt::StructDecl *, ast::StructTy *>> structs;
 
   // first declare all top level decls. this is required for resolving
@@ -61,12 +60,16 @@ void Sema::add(pt::Module const &module) {
 
   for (auto const &[pt, ast] : structs) {
     declare(ast, pt);
+    env.add_type(ast);
+    _ast->_structs.push_back(ast);
   }
 
   // next declare top level items. we can't define them yet as they may refer to
   // each other
   for (auto const &[pt, ast] : functions) {
     declare(ast, pt);
+    env.add_decl(ast);
+    _ast->_functions.push_back(ast);
   }
 
   for (auto const &[pt, ast] : structs) {
@@ -88,12 +91,7 @@ ast::Block *Sema::check(pt::Block &block) {
                      body.push_back(static_cast<ast::Stmt *>(check(stmt)));
                    },
                    [this, &body](pt::VarDecl *stmt) {
-                     ast::Decl *typedecl = env.resolve(stmt->_type);
-                     auto *type = llvm::dyn_cast<ast::Type>(typedecl);
-                     if (type == nullptr) {
-                       spdlog::error("expected type");
-                       std::terminate();
-                     }
+                     ast::Type *type = env.resolve_type(stmt->_type);
 
                      auto *decl =
                          ast::VarDecl::Create(*_ast, stmt->_name, type);
@@ -120,7 +118,7 @@ ast::Block *Sema::check(pt::Block &block) {
                stmt);
   }
 
-  ast::Expr *terminator =
+  not_null<ast::Expr *> terminator =
       block._end.has_value() ? check(block._end.value()) : _ast->_voidExpr;
 
   env.scope_end(ref);
@@ -140,8 +138,8 @@ ast::StructLiteral *Sema::check(pt::StructExpr &expr) {
 }
 
 ast::Return *Sema::check(pt::Return *stmt) {
-  ast::Expr *retVal = stmt->_retVal.has_value() ? check(stmt->_retVal.value())
-                                                : _ast->_voidExpr;
+  ast::Expr *retVal =
+      stmt->_retVal.has_value() ? check(stmt->_retVal.value()) : nullptr;
 
   return ast::Return::Create(*_ast, retVal);
 }
@@ -167,28 +165,15 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
             return ast::IntegerLiteral::Int32(*_ast, expr->_val);
           },
           [this](pt::Call *const &expr) -> ast::Expr * {
-            ast::Decl *decl = env.resolve(expr->fn);
+            ast::Decl *decl = env.resolve_decl(expr->fn);
 
             switch (decl->get_kind()) {
               case ast::Decl::DeclKind::Fn:
                 return ast::FnCall::Create(*_ast, llvm::cast<ast::FnDecl>(decl),
                                            check(*expr->args));
-              case ast::Decl::DeclKind::StructTy: {
-                auto *structty = llvm::cast<ast::StructTy>(decl);
-
-                ast::FnDecl *constructor = env.get_struct_method(structty);
-
-                return ast::FnCall::Create(*_ast, constructor,
-                                           check(*expr->args));
-              }
               case ast::Decl::DeclKind::Var:
               case ast::Decl::DeclKind::Field:
-                assert(false);
-              case ast::Decl::DeclKind::TypeBegin:
-              case ast::Decl::DeclKind::LiteralTy:
-              case ast::Decl::DeclKind::TypeEnd:
-                spdlog::error("cannot call non-callable: {}", decl->name());
-                std::terminate();
+                throw std::runtime_error("not implemented");
             }
           },
           [this](pt::IfExpr *const &expr) -> ast::Expr * {
@@ -236,7 +221,7 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
             }
           },
           [this](pt::DeclRef *expr) -> ast::Expr * {
-            ast::Decl *decl = env.resolve(expr);
+            ast::Decl *decl = env.resolve_decl(expr);
 
             spdlog::info("casting {}", fmt::underlying(decl->get_kind()));
             auto *varDecl = llvm::dyn_cast<ast::VarDecl>(decl);
@@ -245,21 +230,18 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
               std::terminate();
             }
 
-            ast::Type *type = varDecl->_type;
+            ast::Type *type = varDecl->type();
 
             return ast::DeclRef::Create(*_ast, varDecl, type);
           },
           [this](pt::Block *expr) -> ast::Expr * { return check(*expr); },
           [this](pt::FieldAccess *expr) -> ast::Expr * {
-            auto *base = llvm::dyn_cast<ast::DeclRef>(check(expr->base).get());
-            if (base == nullptr) {
-              spdlog::error("expected declref");
-              std::terminate();
-            }
+            ast::Expr *base = check(expr->base);
+            assert(base->lvalueable());
 
             spdlog::info("field access {}",
-                         fmt::underlying(base->_decl->_type->get_kind()));
-            auto *struc = llvm::dyn_cast<ast::StructTy>(base->_decl->_type);
+                         fmt::underlying(base->type()->get_kind()));
+            auto *struc = llvm::dyn_cast<ast::StructTy>(base->type());
             if (struc == nullptr) {
               spdlog::error("can't access field of non-struct");
               std::terminate();
@@ -279,27 +261,13 @@ void Sema::declare(ast::FnDecl *ast, pt::FnDecl *pt) {
   params.reserve(pt->_params.size());
 
   for (auto const &[_, type] : pt->_params) {
-    ast::Decl *decl = env.resolve(type);
-    if (auto *restype = llvm::dyn_cast<ast::LiteralTy>(decl)) {
-      params.push_back(ast::FnDecl::Param(pt->name(), restype));
-    } else {
-      spdlog::error("expected type");
-      std::terminate();
-    }
+    ast::Type *restype = env.resolve_type(type);
+    params.push_back(ast::FnDecl::Param(pt->name(), restype));
   }
 
-  ast::Decl *retDecl = env.resolve(pt->_retTy);
-  auto *type = llvm::dyn_cast<ast::LiteralTy>(retDecl);
-  if (type == nullptr) {
-    spdlog::error("expected return type");
-    std::terminate();
-  }
-
-  // assert(body->type() == retType);
+  ast::Type *type = env.resolve_type(pt->_retTy);
 
   ast->Create(pt->name(), std::move(params), type);
-  env.add_decl(ast);
-  _ast->_functions.push_back(ast);
 }
 
 void Sema::define(ast::FnDecl *ast, pt::FnDecl *pt) {
@@ -310,8 +278,6 @@ void Sema::define(ast::FnDecl *ast, pt::FnDecl *pt) {
 
 void Sema::declare(ast::StructTy *ast, pt::StructDecl *pt) {
   ast->Create(pt->_name);
-
-  env.add_decl(ast);
 
   // {
   //   std::vector<ast::FnDecl::Param> params;
@@ -330,14 +296,9 @@ void Sema::define(ast::StructTy *ast, pt::StructDecl *pt) {
   assert(pt->_fields.size() <= std::numeric_limits<uint8_t>::max());
 
   for (pt::StructDecl::Field const &field : pt->_fields) {
-    ast::Decl *type = env.resolve(field.type);
-    if (auto *resType = llvm::dyn_cast<ast::Type>(type)) {
-      auto ix = static_cast<uint8_t>(fields.size());
-      fields.push_back(ast::FieldDecl::Create(*_ast, field.name, resType, ix));
-    } else {
-      spdlog::error("expected type");
-      std::terminate();
-    }
+    ast::Type *type = env.resolve_type(field.type);
+    auto ix = static_cast<uint8_t>(fields.size());
+    fields.push_back(ast::FieldDecl::Create(*_ast, field.name, type, ix));
   }
 
   ast->define(std::move(fields));

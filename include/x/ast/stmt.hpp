@@ -40,10 +40,10 @@ class Return : public Stmt, public AllowAlloc<Context, Return> {
   friend AllowAlloc;
 
  public:
-  not_null<Expr*> _val;
+  Expr* _val;
 
  private:
-  explicit Return(not_null<Expr*> val) : Stmt(SK_Return), _val(val) {};
+  explicit Return(Expr* val) : Stmt(SK_Return), _val(val) {};
 
  public:
   static bool classof(Stmt const* expr) {

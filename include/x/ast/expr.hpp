@@ -23,7 +23,11 @@ class Expr : public Stmt {
   /// data only valid for lvaluable expressions
   struct LValueData {
     /// set to false through to_rvalue when we want to assign to this expression
-    bool toRValue : 1 {true};
+    bool toRValue{true};
+
+    /// decl that is being accessed. e.g. vardecl for declref or FieldDecl for
+    /// FieldAccess
+    Decl* decl;
   } _lvalData;
 
   [[nodiscard]] bool lvalueable() const {
@@ -225,7 +229,7 @@ class FieldAccess : public Expr, public AllowAlloc<Context, FieldAccess> {
  private:
   friend AllowAlloc;
   FieldAccess(not_null<Expr*> base, not_null<FieldDecl*> field)
-      : Expr(SK_FieldAccess, field->_type), _base(base), _field(field) {}
+      : Expr(SK_FieldAccess, field->type()), _base(base), _field(field) {}
 
  public:
   static bool classof(Stmt const* expr) {

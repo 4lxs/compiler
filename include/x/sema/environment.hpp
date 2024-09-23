@@ -1,12 +1,11 @@
 #pragma once
 
-#include <map>
-#include <span>
 #include <vector>
 
 #include "spdlog/spdlog.h"
 #include "x/ast/decl.hpp"
 #include "x/ast/fwd_decl.hpp"
+#include "x/ast/type.hpp"
 #include "x/pt/fwd_decl.hpp"
 
 namespace x::sema {
@@ -15,37 +14,51 @@ class SymbolTable {
  public:
   struct Ident {
     std::string_view name;
-    not_null<ast::Decl*> decl;
+    std::variant<not_null<ast::Decl *>, not_null<ast::Type *>> val;
   };
 
-  [[nodiscard]] not_null<ast::Decl*> resolve(not_null<pt::DeclRef*> var) const;
-
-  [[nodiscard]] not_null<ast::FnDecl*> resolve_function(
-      not_null<pt::DeclRef*> var, ast::StructLiteral* args) const;
-
-  std::span<Ident> global_decls() { return _decls; }
-
-  void add_decl(not_null<ast::Decl*> decl) {
-    spdlog::info("adding {}.", decl->name());
-    _decls.push_back(Ident{decl->name(), decl});
+  [[nodiscard]] not_null<ast::Decl *> resolve_decl(
+      not_null<pt::DeclRef *> var) const {
+    Ident ident = resolve(var);
+    if (auto *decl = std::get_if<not_null<ast::Decl *>>(&ident.val)) {
+      return *decl;
+    }
+    throw std::runtime_error(fmt::format("expected decl {}", ident.name));
   }
 
-  void add_struct_method(not_null<ast::StructTy*> type,
-                         not_null<ast::FnDecl*> method);
+  [[nodiscard]] not_null<ast::Type *> resolve_type(
+      not_null<pt::DeclRef *> var) const {
+    Ident ident = resolve(var);
+    if (auto *type = std::get_if<not_null<ast::Type *>>(&ident.val)) {
+      return *type;
+    }
+    throw std::runtime_error(fmt::format("expected type {}", ident.name));
+  }
 
-  [[nodiscard]] not_null<ast::FnDecl*> get_struct_method(
-      not_null<ast::StructTy*> type) const;
+  void add_decl(not_null<ast::Decl *> decl) {
+    spdlog::info("adding {}.", decl->name());
+    _env.push_back(Ident{decl->name(), decl});
+  }
+
+  void add_type(not_null<ast::Type *> type) {
+    spdlog::info("adding type {}.", type->name());
+    _env.push_back(Ident{type->name(), type});
+  }
+
+  [[nodiscard]] not_null<ast::FnDecl *> get_struct_method(
+      not_null<ast::StructTy *> type) const;
 
   using BlockRef = size_t;
 
-  [[nodiscard]] BlockRef scope_begin() const { return _decls.size(); }
+  [[nodiscard]] BlockRef scope_begin() const { return _env.size(); }
 
   void scope_end(BlockRef ref) {
-    _decls.erase(_decls.begin() + long(ref), _decls.end());
+    _env.erase(_env.begin() + long(ref), _env.end());
   }
 
-  std::vector<Ident> _decls;
+ private:
+  [[nodiscard]] Ident resolve(not_null<pt::DeclRef *> var) const;
 
-  std::map<ast::StructTy*, std::vector<not_null<ast::FnDecl*>>> _methods;
+  std::vector<Ident> _env;
 };
 };  // namespace x::sema
