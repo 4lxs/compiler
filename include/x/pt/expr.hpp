@@ -111,6 +111,15 @@ class StructExpr : public AllowAlloc<Context, StructExpr> {
       : fields(std::move(fields)) {}
 };
 
-// class VarExpr : public AllowAlloc<Context, VarExpr> {friend AllowAlloc;};
+class FieldAccess : public Expr, public AllowAlloc<Context, FieldAccess> {
+ public:
+  Expr base;
+  std::string field;
+
+ private:
+  friend AllowAlloc;
+  FieldAccess(Expr base, std::string field)
+      : base(base), field(std::move(field)) {}
+};
 
 }  // namespace x::pt

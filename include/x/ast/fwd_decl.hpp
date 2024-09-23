@@ -1,13 +1,14 @@
 #pragma once
 
 #include <cstddef>
-#include <variant>
 
 namespace x::ast {
 
 class Context;
 
 class Type;
+class LiteralTy;
+class StructTy;
 
 class FnDecl;
 
@@ -18,6 +19,7 @@ class Assign;
 class Decl;
 
 class Expr;
+class FieldAccess;
 class IntegerLiteral;
 class StringLiteral;
 class BoolE;

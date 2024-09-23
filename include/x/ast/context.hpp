@@ -17,10 +17,10 @@ class Context {
 
  public:
   // builtin types
-  not_null<Type *> _int32Ty;
-  not_null<Type *> _int64Ty;
-  not_null<Type *> _boolTy;
-  not_null<Type *> _voidTy;
+  not_null<LiteralTy *> _int32Ty;
+  not_null<LiteralTy *> _int64Ty;
+  not_null<LiteralTy *> _boolTy;
+  not_null<LiteralTy *> _voidTy;
 
   /// this is an expression with void type. it's used in places that are
   /// expressions, but don't have a value. e.g. a call expr that calls a
@@ -33,14 +33,14 @@ class Context {
  public:  // TODO: temp
   friend class sema::Sema;
   std::vector<FnDecl *> _functions;
-  std::vector<Type *> _types;
+  std::vector<LiteralTy *> _types;
 
  public:  // TODO: friend doesn't work
   template <typename, typename>
   friend class AllowAlloc;
 
   template <typename T>
-    requires std::derived_from<T, Stmt> || std::derived_from<T, Type>
+    requires std::derived_from<T, Stmt> || std::derived_from<T, Decl>
   T *allocate(size_t alignment = 8) const {
     return reinterpret_cast<T *>(_allocator.Allocate(sizeof(T), alignment));
   }

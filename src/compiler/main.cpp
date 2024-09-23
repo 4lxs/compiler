@@ -98,10 +98,10 @@ void compile(std::string_view filename) {
 
   antlr4::CommonTokenStream tokens(&lexer);
 
-  tokens.fill();
-  for (auto *tok : tokens.getTokens()) {
-    spdlog::info("token: {}\n", tok->toString());
-  }
+  // tokens.fill();
+  // for (auto *tok : tokens.getTokens()) {
+  //   spdlog::info("token: {}\n", tok->toString());
+  // }
 
   XParser parser(&tokens);
   parser.removeErrorListeners();

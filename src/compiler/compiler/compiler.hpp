@@ -9,9 +9,9 @@
 #include <llvm/IR/Verifier.h>
 #include <spdlog/spdlog.h>
 
-#include <map>
 #include <ranges>
 #include <utility>
+#include <variant>
 
 #include "x/ast/expr.hpp"
 #include "x/ast/stmt.hpp"
@@ -21,15 +21,45 @@ namespace x {
 
 class Compiler {
  public:
+  /// a wrapper over llvm::Value* to provide additional information
+  struct Value {
+    operator bool() const { return _llvmV != nullptr; }
+
+    [[nodiscard]] bool isPtr() const { return _derefType != nullptr; }
+
+    explicit Value(llvm::Value* llvmVal, llvm::Type* derefType = nullptr)
+        : _llvmV(llvmVal), _derefType{derefType} {}
+    Value() = default;
+
+    llvm::Value* _llvmV{};
+
+    /// if this is a pointer, this is the type of the value it points
+    llvm::Type* _derefType{};
+  };
+
+  llvm::Value* get_deref(Value const& value) {
+    if (!value.isPtr() || value._llvmV == nullptr) {
+      return value._llvmV;
+    }
+    return _builder.CreateLoad(value._derefType, value._llvmV);
+  }
+
   void compile(ast::Context const& context) {
+    context._int32Ty->_llvmType = llvm::Type::getInt32Ty(_ctx);
+    context._int64Ty->_llvmType = llvm::Type::getInt64Ty(_ctx);
+    context._voidTy->_llvmType = llvm::Type::getVoidTy(_ctx);
+    context._boolTy->_llvmType = llvm::Type::getInt1Ty(_ctx);
+
     for (auto const& fnctn : context._functions) {
-      spdlog::info("compiling function {}", fmt::ptr(fnctn));
+      spdlog::info("compiling function {} with name {}", fmt::ptr(fnctn),
+                   fnctn->name());
       // we need to forward declare all functions
       function(*fnctn);
     }
 
     for (auto const& fnctn : context._functions) {
       llvm::Function* func = _mod.getFunction(fnctn->name());
+      assert(func != nullptr);
       _currentFunction = func;
       llvm::BasicBlock* body = llvm::BasicBlock::Create(_ctx, "entry", func);
       _builder.SetInsertPoint(body);
@@ -39,7 +69,10 @@ class Compiler {
         spdlog::info("stmt");
         compile(stmt);
       }
+
+      spdlog::info("function {}", fmt::ptr(func));
       if (llvm::verifyFunction(*func, &llvm::errs())) {
+        _mod.print(llvm::outs(), nullptr);
         std::terminate();
       }
     }
@@ -52,7 +85,7 @@ class Compiler {
       case ast::Stmt::SK_Return: {
         auto const& ret = llvm::cast<ast::Return>(*stmt);
         spdlog::info("ret");
-        _builder.CreateRet(ret._val != nullptr ? eval(*ret._val) : nullptr);
+        _builder.CreateRet(get_deref(eval(ret._val)));
       } break;
       case ast::Stmt::SK_Int:
       case ast::Stmt::SK_Bool:
@@ -62,7 +95,7 @@ class Compiler {
       case ast::Stmt::SK_Call:
       case ast::Stmt::SK_DeclRef:
       case ast::Stmt::SK_Block:
-        eval(*stmt);
+        eval(stmt);
         break;
       case ast::Stmt::SK_Function:
         // all functions should live in context._functions
@@ -75,38 +108,34 @@ class Compiler {
         auto* decl = llvm::cast<ast::VarDecl>(stmt);
         llvm::AllocaInst* allocaInst = _builder.CreateAlloca(
             to_llvm_type(decl->_type), nullptr, decl->name());
-        _allocs.insert({decl, allocaInst});
+        decl->_alloca = allocaInst;
       } break;
       case ast::Stmt::SK_Assign: {
         auto* ass = llvm::cast<ast::Assign>(stmt);
-        llvm::AllocaInst* var = _allocs.at(ass->_variable);
-        _builder.CreateStore(eval(*ass->_value), var);
+        Value val = eval(ass->_value);
+        Value lhs = eval(ass->_variable);
+        assert(lhs.isPtr());
+
+        _builder.CreateStore(get_deref(val), lhs._llvmV);
+      } break;
+      case ast::Stmt::SK_FieldAccess: {
+        assert(false);
       } break;
     }
   }
-  //
-  // void visitStmt(const std::unique_ptr<pt::Expr>& expr) {
-  //   llvm::Value* val = eval(*expr);
-  //   if (val != nullptr) {
-  //     spdlog::warn("unused value");
-  //   }
-  // }
-
-  void visitStmt(ast::Expr const& expr) {
-    spdlog::info("expr");
-    eval(expr);
-  }
-
-  // void visitStmt(const auto& stmt) { std::terminate(); }
 
   /// @param expr required to be an expression. that is kind between ExprBegin
   /// and ExprEnd
-  llvm::Value* eval(ast::Stmt const& expr) {
-    switch (expr.get_kind()) {
+  Value eval(ast::Stmt* expr) {
+    if (expr == nullptr) {
+      return {};
+    }
+
+    switch (expr->get_kind()) {
       case ast::Stmt::SK_Int: {
         auto const& inte = llvm::cast<ast::IntegerLiteral>(expr);
-        return llvm::ConstantInt::get(_ctx,
-                                      llvm::APInt(inte._width, inte._val, 10));
+        return Value{llvm::ConstantInt::get(
+            _ctx, llvm::APInt(inte->_width, inte->_val, 10))};
       } break;
       case ast::Stmt::SK_Bool:
       case ast::Stmt::SK_String:
@@ -114,7 +143,7 @@ class Compiler {
         assert(false);
       case ast::Stmt::SK_If: {
         auto const& ife = llvm::cast<ast::If>(expr);
-        llvm::Value* cond = eval(*ife._cond);
+        llvm::Value* cond = get_deref(eval(ife->_cond));
 
         assert(_currentFunction != nullptr);
         auto* then = llvm::BasicBlock::Create(_ctx, "then", _currentFunction);
@@ -124,89 +153,110 @@ class Compiler {
         _builder.CreateCondBr(cond, then, els);
 
         _builder.SetInsertPoint(then);
-        llvm::Value* thenVal = eval(*ife._then);
+        Value thenVal = eval(ife->_then);
         _builder.CreateBr(end);
 
         _currentFunction->insert(_currentFunction->end(), els);
         _builder.SetInsertPoint(els);
-        llvm::Value* elseVal =
-            ife._else != nullptr ? eval(*ife._else) : nullptr;
+        Value elseVal = eval(ife->_else);
         _builder.CreateBr(end);
 
         _currentFunction->insert(_currentFunction->end(), end);
         _builder.SetInsertPoint(end);
 
-        if (thenVal == nullptr || elseVal == nullptr) {
-          return nullptr;
+        if (!thenVal || !elseVal) {
+          return {};
         }
 
-        auto* phi = _builder.CreatePHI(thenVal->getType(), 2);
+        auto* phi = _builder.CreatePHI(get_deref(thenVal)->getType(), 2);
 
-        phi->addIncoming(thenVal, then);
-        phi->addIncoming(elseVal, els);
+        phi->addIncoming(get_deref(thenVal), then);
+        phi->addIncoming(get_deref(elseVal), els);
 
-        return phi;
+        return Value{phi};
       } break;
       case ast::Stmt::SK_Call: {
         auto const& call = llvm::cast<ast::FnCall>(expr);
-        llvm::Function* calee = _mod.getFunction(call._fn->name());
+        llvm::Function* calee = _mod.getFunction(call->_fn->name());
         assert(calee);
-        assert(calee->arg_size() == call._args->_fields.size());
+        assert(calee->arg_size() == call->_args->_fields.size());
 
         std::vector<llvm::Value*> args;
         args.reserve(calee->arg_size());
-        for (ast::Expr* const& field : call._args->_fields) {
-          llvm::Value* val = eval(*field);
+        for (ast::Expr* const& field : call->_args->_fields) {
+          llvm::Value* val = get_deref(eval(field));
           assert(val != nullptr);
           args.push_back(val);
         }
 
-        return _builder.CreateCall(calee, args);
+        return Value{_builder.CreateCall(calee, args)};
       } break;
       case ast::Stmt::SK_Block: {
         auto const& block = llvm::cast<ast::Block>(expr);
-        for (ast::Stmt* stmt : block._body) {
+        for (ast::Stmt* stmt : block->_body) {
           compile(stmt);
         }
 
-        return block.terminator != nullptr ? eval(*block.terminator) : nullptr;
+        return eval(block->terminator);
       } break;
       case ast::Stmt::SK_Builtin: {
         auto const& builtin = llvm::cast<ast::Builtin>(expr);
-        switch (builtin._op) {
+        switch (builtin->_op) {
           case ast::Builtin::Op::iAdd:
             spdlog::info("iAdd");
-            builtin._args.at(0)->type()->prettyPrint();
-            builtin._args.at(1)->type()->prettyPrint();
-            return _builder.CreateAdd(eval(*builtin._args.at(0)),
-                                      eval(*builtin._args.at(1)));
+            return Value{
+                _builder.CreateAdd(get_deref(eval(builtin->_args.at(0))),
+                                   get_deref(eval(builtin->_args.at(1))))};
           case ast::Builtin::Op::iLess:
-            return _builder.CreateICmpULT(eval(*builtin._args.at(0)),
-                                          eval(*builtin._args.at(1)));
+            return Value{
+                _builder.CreateICmpULT(get_deref(eval(builtin->_args.at(0))),
+                                       get_deref(eval(builtin->_args.at(1))))};
           case ast::Builtin::Op::Start2:
           case ast::Builtin::Op::Start3:
             std::unreachable();
           case ast::Builtin::Op::iSub:
-            return _builder.CreateSub(eval(*builtin._args.at(0)),
-                                      eval(*builtin._args.at(1)));
+            return Value{
+                _builder.CreateSub(get_deref(eval(builtin->_args.at(0))),
+                                   get_deref(eval(builtin->_args.at(1))))};
           case ast::Builtin::Op::iMul:
-            return _builder.CreateMul(eval(*builtin._args.at(0)),
-                                      eval(*builtin._args.at(1)));
+            return Value{
+                _builder.CreateMul(get_deref(eval(builtin->_args.at(0))),
+                                   get_deref(eval(builtin->_args.at(1))))};
           case ast::Builtin::Op::iDiv:
-            return _builder.CreateUDiv(eval(*builtin._args.at(0)),
-                                       eval(*builtin._args.at(1)));
+            return Value{
+                _builder.CreateUDiv(get_deref(eval(builtin->_args.at(0))),
+                                    get_deref(eval(builtin->_args.at(1))))};
           case ast::Builtin::Op::iGreater:
-            return _builder.CreateICmpUGT(eval(*builtin._args.at(0)),
-                                          eval(*builtin._args.at(1)));
+            return Value{
+                _builder.CreateICmpUGT(get_deref(eval(builtin->_args.at(0))),
+                                       get_deref(eval(builtin->_args.at(1))))};
         }
       } break;
       case ast::Stmt::SK_DeclRef: {
         auto const& declRef = llvm::cast<ast::DeclRef>(expr);
-        llvm::AllocaInst* allocaInst = _allocs.at(declRef._decl);
-        return _builder.CreateLoad(allocaInst->getAllocatedType(), allocaInst,
-                                   declRef._decl->name());
-      } break;
-      default:
+        llvm::AllocaInst* allocaInst = declRef->_decl->_alloca;
+        assert(allocaInst != nullptr);
+        return Value{allocaInst, allocaInst->getAllocatedType()};
+      }; break;
+      case ast::Stmt::SK_FieldAccess: {
+        auto const& fieldAccess = llvm::cast<ast::FieldAccess>(expr);
+        spdlog::info("accessing field {} of struct {}",
+                     fieldAccess->_field->name(),
+                     fieldAccess->_base->type()->name());
+        Value base = eval(fieldAccess->_base);
+        assert(base.isPtr());
+
+        llvm::Value* ptr = _builder.CreateStructGEP(
+            to_llvm_type(fieldAccess->_base->type()), base._llvmV, 0);
+
+        return Value{ptr, to_llvm_type(fieldAccess->type())};
+      }
+      case ast::Stmt::SK_Return:
+      case ast::Stmt::SK_Function:
+      case ast::Stmt::SK_VarDecl:
+      case ast::Stmt::SK_Assign:
+      case ast::Stmt::SK_Expr:
+      case ast::Stmt::SK_ExprEnd:
         std::unreachable();
     }
   }
@@ -235,7 +285,37 @@ class Compiler {
   }
 
   llvm::Type* to_llvm_type(ast::Type* type) {
-    spdlog::info("getting type: {}", fmt::underlying(type->_kind));
+    spdlog::info("getting type: {}", type->name());
+
+    if (type->_llvmType != nullptr) {
+      return type->_llvmType;
+    }
+
+    switch (type->get_kind()) {
+      case ast::Decl::DeclKind::StructTy: {
+        auto* structTy = llvm::cast<ast::StructTy>(type);
+        // structTy->_fields
+
+        std::vector<llvm::Type*> fields;
+        fields.reserve(structTy->_fields.size());
+
+        for (ast::FieldDecl* const& field : structTy->_fields) {
+          fields.push_back(to_llvm_type(field->_type));
+        }
+        type->_llvmType =
+            llvm::StructType::create(_ctx, fields, structTy->name());
+
+        return type->_llvmType;
+      }
+      case ast::Decl::DeclKind::LiteralTy:
+        // all literal types are created in compile()
+      case ast::Decl::DeclKind::TypeBegin:
+      case ast::Decl::DeclKind::Fn:
+      case ast::Decl::DeclKind::Var:
+      case ast::Decl::DeclKind::Field:
+      case ast::Decl::DeclKind::TypeEnd:
+        std::unreachable();
+    }
     return llvm::Type::getInt32Ty(_ctx);
   }
 
@@ -244,9 +324,6 @@ class Compiler {
   llvm::Module _mod{"my cool jit", _ctx};
   llvm::IRBuilder<> _builder{_ctx};
 
-  std::map<ast::VarDecl*, llvm::AllocaInst*> _allocs;
-
   llvm::Function* _currentFunction{};
 };
-
 };  // namespace x

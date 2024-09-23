@@ -9,6 +9,7 @@
 #include <llvm/IR/Value.h>
 
 #include "x/pt/context.hpp"
+#include "x/pt/decl.hpp"
 #include "x/pt/stmt.hpp"
 
 namespace x {
@@ -30,7 +31,7 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitBinaryE(parser::XParser::BinaryEContext *ctx) override;
 
-  std::any visitAnonStruct(parser::XParser::AnonStructContext *ctx) override;
+  std::any visitStructExpr(parser::XParser::StructExprContext *ctx) override;
 
   std::any visitStmt(parser::XParser::StmtContext *ctx) override;
 
@@ -40,9 +41,19 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitVarDef(parser::XParser::VarDefContext *ctx) override;
 
+  std::any visitVarAssign(parser::XParser::VarAssignContext *ctx) override;
+
   std::any visitVarE(parser::XParser::VarEContext *ctx) override;
 
+  std::any visitStructDef(parser::XParser::StructDefContext *ctx) override;
+
+  std::any visitMemberAccess(
+      parser::XParser::MemberAccessContext *ctx) override;
+
  private:
+  [[nodiscard]]
+  pt::StructDecl::Field parse_field(parser::XParser::StructFieldContext *ctx);
+
   [[nodiscard]]
   std::vector<pt::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
 

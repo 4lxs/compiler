@@ -2,7 +2,7 @@ grammar X;
 options { tokenVocab=XLexer; }
 
 program
-    : moddef (function | staticDef | typeDef)+ EOF
+    : moddef (function | staticDef | structDef)+ EOF
     ;
 
 // allow a; b; 5+3
@@ -23,11 +23,18 @@ staticDef
     ;
 
 varDef
-    : Let name=Ident Cln type=path (Eq val=expr)?
+    : Let name=Ident Cln type=path (Eq val=expr)? Sc
     ;
 
-typeDef
-    : Type name=Ident Eq val=path Sc
+varAssign
+    : primaryExpr Eq expr;
+
+structDef
+    : Struct name=Ident LPrn (structField (Cma structField)*) RPrn
+    ;
+
+structField
+    : name=Ident Cln path (Eq value=expr)?
     ;
 
 function
@@ -45,8 +52,9 @@ stmt
     : if_
     | block
     | expr Sc
-    | varDef Sc
-    | typeDef Sc
+    | varDef
+    | varAssign
+    | structDef
     | return
     // | function
     | Sc
@@ -60,26 +68,60 @@ if_
     : If expr then=block (Else else_=block)?
     ;
 
-expr
-    : if_ #ifE
+// expressions that can appear at the start of member chain
+// primaryExpr.a.b.c()
+primaryExpr
+    : primaryExpr Dot memberAccess #memberE
+    | if_ #ifE
     | block #blockE
-    | path #varE
-    // primary expressions
+    // primary values
     | IntegerLiteral #intPE
     | String #strPE
     | (True | False) #boolPE
 
-    | fn=path arg=anonStruct #callE
-    | path #varE
-    | anonStruct #structE
+    | fn=path arg=structExpr #callE
+    | Ident #varE
+    | structExpr #structE
+    ;
+
+// ().x
+// ().x()
+// if {} else {}.x()
+// ().x.y().z
+// if {} else {}.x()
+
+memberAccess
+    : field=Ident args=structExpr?
+    ;
+
+expr
+    : primaryExpr #primaryE
 	| left=expr bop=( Star | Slash ) right=expr #binaryE
 	| left=expr bop=( Plus | Minus ) right=expr #binaryE
 	| left=expr bop=( Greater | Less ) right=expr #binaryE
     ;
 
-anonStruct
-    : LPrn (Ident Eq expr (Cma Ident Eq expr)*)? RPrn
+// (a=b, b), (c, d)
+// structs, tuples, arguments
+structExpr
+    : LPrn (structExprField (Cma structExprField)* Cma?)? RPrn
     ;
+
+structExprField
+    : (Ident Eq)? expr
+    ;
+
+//===
+// Types
+//===
+
+// type
+//     : path #bareTy
+//     | LPrn RPrn #unitTy
+//     | LPrn (Ident Cln type (Cma Ident Cln type)*)? RPrn #structTy
+//     | LBk type Sc IntegerLiteral RBk #sliceTy
+//     | LPrn type (Cma type)* RPrn #tupleTy
+//     ;
 
 //===
 // Path
@@ -97,7 +139,7 @@ Comment: '//' .*? Eol -> skip;
 
 Let: 'let';
 Module: 'module';
-Type: 'type';
+Struct: 'struct';
 Fn: 'fn';
 If: 'if';
 Else: 'else';
@@ -109,6 +151,7 @@ Eq: '=';
 EqEq: '==';
 
 Cma: ',';
+Dot: '.';
 ClnCln: '::';
 Cln: ':';
 Sc: ';';

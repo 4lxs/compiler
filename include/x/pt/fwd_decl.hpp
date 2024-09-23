@@ -9,7 +9,6 @@ class Module;
 
 struct Path;
 
-class VarExpr;
 class StructExpr;
 class IntegerE;
 class IfExpr;
@@ -19,17 +18,20 @@ class StructExpr;
 class Call;
 class Block;
 class DeclRef;
-using Expr = std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*,
-                          StructExpr*, Call*, Block*, VarExpr*, DeclRef*>;
+class FieldAccess;
+using Expr =
+    std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*, StructExpr*,
+                 Call*, Block*, DeclRef*, FieldAccess*>;
 
 struct FnParam;
 class FnDecl;
+class StructDecl;
 class VarDecl;
-class TypeDecl;
 using ValueDecl = std::variant<FnDecl*, VarDecl*>;
-using TopLevelDecl = std::variant<FnDecl*>;
+using TopLevelDecl = std::variant<FnDecl*, StructDecl*>;
 
 class Return;
-using Stmt = std::variant<Expr, Return*, VarDecl*>;
+class Assign;
+using Stmt = std::variant<Expr, Return*, VarDecl*, Assign*>;
 
 }  // namespace x::pt

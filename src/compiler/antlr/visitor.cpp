@@ -21,7 +21,6 @@ std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
   }
 
   bool external = ctx->initSep != nullptr;
-  spdlog::info("external? {}", external);
 
   _module = _ctx->module(pt::Path(std::move(modulepath), external));
 
@@ -62,7 +61,7 @@ std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
 
   auto* fnVar = pt::DeclRef::Create(*_ctx, get_path(ctx->fn));
 
-  visitAnonStruct(ctx->anonStruct());
+  visitStructExpr(ctx->structExpr());
   auto* args = std::get<pt::StructExpr*>(_stack.pop());
 
   _stack.push(pt::Call::Create(*_ctx, fnVar, args));
@@ -113,16 +112,18 @@ std::any Visitor::visitBinaryE(parser::XParser::BinaryEContext* ctx) {
   return {};
 }
 
-std::any Visitor::visitAnonStruct(parser::XParser::AnonStructContext* ctx) {
+std::any Visitor::visitStructExpr(parser::XParser::StructExprContext* ctx) {
+  auto ctxFields = ctx->structExprField();
+
   visitChildren(ctx);
-
-  std::vector<antlr4::tree::TerminalNode*> names = ctx->Ident();
-  std::vector<pt::Expr> vals = _stack.pop(names.size());
+  std::vector<pt::Expr> vals = _stack.pop(ctxFields.size());
   std::vector<pt::Field> fields;
-  fields.reserve(names.size());
+  fields.reserve(vals.size());
 
-  for (auto&& [ident, expr] : std::views::zip(names, vals)) {
-    fields.emplace_back(ident->getText(), expr);
+  for (auto&& [fieldCtx, expr] : std::views::zip(ctxFields, vals)) {
+    std::string name =
+        (fieldCtx->Ident() != nullptr) ? fieldCtx->Ident()->getText() : "";
+    fields.emplace_back(std::move(name), expr);
   }
 
   _stack.push(pt::StructExpr::Create(*_ctx, std::move(fields)));
@@ -199,11 +200,69 @@ std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
   return {};
 }
 
-std::any Visitor::visitVarE(parser::XParser::VarEContext* ctx) {
-  assert(ctx->path() != nullptr);
-  _stack.push(pt::DeclRef::Create(*_ctx, get_path(ctx->path())));
+std::any Visitor::visitVarAssign(parser::XParser::VarAssignContext* ctx) {
+  visit(ctx->primaryExpr());
+  pt::Expr assignee = _stack.pop();
+  visit(ctx->expr());
+  pt::Expr val = _stack.pop();
+
+  auto* expr = pt::Assign::Create(*_ctx, assignee, val);
+  _block->add(expr);
 
   return {};
+}
+
+std::any Visitor::visitVarE(parser::XParser::VarEContext* ctx) {
+  _stack.push(pt::DeclRef::Create(*_ctx, pt::Path({ctx->Ident()->getText()})));
+
+  return {};
+}
+
+std::any Visitor::visitStructDef(parser::XParser::StructDefContext* ctx) {
+  std::vector<pt::StructDecl::Field> fields;
+
+  for (parser::XParser::StructFieldContext* field : ctx->structField()) {
+    fields.push_back(parse_field(field));
+  }
+
+  _module->define(
+      pt::StructDecl::Create(*_ctx, ctx->name->getText(), std::move(fields)));
+
+  return {};
+}
+
+std::any Visitor::visitMemberAccess(parser::XParser::MemberAccessContext* ctx) {
+  pt::Expr base = _stack.pop();
+
+  pt::Expr expr = pt::FieldAccess::Create(*_ctx, base, ctx->field->getText());
+
+  if (ctx->args != nullptr) {
+    std::terminate();
+
+    // visitStructExpr(ctx->args);
+    // expr =
+    //     pt::Call::Create(*_ctx, expr,
+    //     std::get<pt::StructExpr*>(_stack.pop()));
+  }
+
+  _stack.push(expr);
+
+  return {};
+}
+
+pt::StructDecl::Field Visitor::parse_field(
+    parser::XParser::StructFieldContext* ctx) {
+  std::optional<pt::Expr> defVal;
+  if (ctx->value != nullptr) {
+    visit(ctx->value);
+    defVal = _stack.pop();
+  }
+
+  return pt::StructDecl::Field{
+      .name = ctx->name->getText(),
+      .type = pt::DeclRef::Create(*_ctx, get_path(ctx->path())),
+      .defaultVal = defVal,
+  };
 }
 
 std::vector<pt::FnParam> Visitor::parse_params(
@@ -230,7 +289,6 @@ pt::Path Visitor::get_path(parser::XParser::PathContext* ctx) {
   }
 
   bool external = ctx->initSep != nullptr;
-  spdlog::info("external? {}", external);
 
   return pt::Path{std::move(components), external};
 }

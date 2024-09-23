@@ -27,7 +27,11 @@ class Sema {
   void declare(ast::FnDecl* ast, pt::FnDecl* pt);
   void define(ast::FnDecl* ast, pt::FnDecl* pt);
 
+  void declare(ast::StructTy* ast, pt::StructDecl* pt);
+  void define(ast::StructTy* ast, pt::StructDecl* pt);
+
   ast::Return* check(pt::Return* stmt);
+  ast::Assign* check(pt::Assign* stmt);
   ast::VarDecl* check(pt::VarDecl* stmt);
   not_null<ast::Expr*> check(pt::Expr& expr);
 

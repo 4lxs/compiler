@@ -20,6 +20,22 @@ class Expr : public Stmt {
 
   [[nodiscard]] Type* type() const { return _type; }
 
+  /// data only valid for lvaluable expressions
+  struct LValueData {
+    /// set to false through to_rvalue when we want to assign to this expression
+    bool toRValue : 1 {true};
+  } _lvalData;
+
+  [[nodiscard]] bool lvalueable() const {
+    return get_kind() == SK_DeclRef || get_kind() == SK_FieldAccess;
+  }
+
+  void to_lvalue() {
+    assert(lvalueable());
+
+    _lvalData.toRValue = false;
+  }
+
   /// if we inherrit from allowalloc, child classes will have problems. it's
   /// only used for voidty anyways
   using Alloc = AllowAlloc<Context, Expr>;
@@ -54,7 +70,8 @@ class IntegerLiteral : public Expr,
   }
 
  private:
-  IntegerLiteral(uint32_t width, std::string_view val, uint8_t base, Type* type)
+  IntegerLiteral(uint32_t width, std::string_view val, uint8_t base,
+                 LiteralTy* type)
       : Expr(SK_Int, type), _val(val), _width(width), _base(base) {}
 
  public:  // TODO: temp
@@ -97,6 +114,7 @@ class StructLiteral : public Expr, public AllowAlloc<Context, StructLiteral> {
   explicit StructLiteral(std::vector<Expr*> fields)
       : Expr(SK_Struct, nullptr), _fields(std::move(fields)) {}
 
+  StructTy* _type;
   std::vector<Expr*> _fields;
 
  public:
@@ -125,13 +143,13 @@ class Block : public Expr, public AllowAlloc<Context, Block> {
 
  public:  // TODO: temp
   /// note that terminator needs to be initialized with a type
-  Block(std::vector<ast::Stmt*> body, Expr* terminator)
+  Block(std::vector<ast::Stmt*> body, not_null<Expr*> terminator)
       : Expr(SK_Block, terminator->type()),
         _body(std::move(body)),
         terminator(terminator) {}
 
   std::vector<ast::Stmt*> _body;
-  Expr* terminator;
+  not_null<Expr*> terminator;
 
  public:
   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Block; }
@@ -148,8 +166,6 @@ class If : public Expr, public AllowAlloc<Context, If> {
  private:
   If(not_null<Expr*> cond, not_null<Block*> then, Block* els)
       : Expr(SK_If, then->type()), _cond(cond), _then(then), _else(els) {
-    then->type()->prettyPrint();
-    els->type()->prettyPrint();
     assert(then->type() == els->type());
   }
 
@@ -198,6 +214,22 @@ class DeclRef : public Expr, public AllowAlloc<Context, DeclRef> {
  public:
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_DeclRef;
+  }
+};
+
+class FieldAccess : public Expr, public AllowAlloc<Context, FieldAccess> {
+ public:
+  not_null<Expr*> _base;
+  not_null<FieldDecl*> _field;
+
+ private:
+  friend AllowAlloc;
+  FieldAccess(not_null<Expr*> base, not_null<FieldDecl*> field)
+      : Expr(SK_FieldAccess, field->_type), _base(base), _field(field) {}
+
+ public:
+  static bool classof(Stmt const* expr) {
+    return expr->get_kind() == SK_FieldAccess;
   }
 };
 

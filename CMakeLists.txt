@@ -22,6 +22,7 @@ myproject_setup_dependencies()
 myproject_local_options()
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -D_GLIBCXX_DEBUG")
 
 target_compile_features(myproject_options
                         INTERFACE cxx_std_${CMAKE_CXX_STANDARD})

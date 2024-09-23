@@ -50,6 +50,21 @@ class VarDecl : public AllowAlloc<Context, VarDecl> {
       : _name(std::move(name)), _type(type), _val(val) {};
 };
 
-class TypeDecl {};
+class StructDecl : public AllowAlloc<Context, StructDecl> {
+ public:
+  struct Field {
+    std::string name;
+    not_null<DeclRef *> type;
+    std::optional<Expr> defaultVal;
+  };
+
+  std::string _name;
+  std::vector<Field> _fields;
+
+ private:
+  friend AllowAlloc;
+  explicit StructDecl(std::string name, std::vector<Field> &&fields)
+      : _name(std::move(name)), _fields(std::move(fields)) {}
+};
 
 }  // namespace x::pt
