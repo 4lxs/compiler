@@ -67,4 +67,29 @@ class StructDecl : public AllowAlloc<Context, StructDecl> {
       : _name(std::move(name)), _fields(std::move(fields)) {}
 };
 
+class EnumDecl : public AllowAlloc<Context, EnumDecl> {
+ public:
+  struct Variant {
+    std::string name;
+  };
+  std::string _name;
+  std::vector<Variant> _variants;
+
+ private:
+  friend AllowAlloc;
+  explicit EnumDecl(std::string name, std::vector<Variant> &&variants)
+      : _name(std::move(name)), _variants(std::move(variants)) {}
+};
+
+class TypeDecl : public AllowAlloc<Context, TypeDecl> {
+ public:
+  std::string _name;
+  not_null<DeclRef *> _type;
+
+ private:
+  friend AllowAlloc;
+  TypeDecl(std::string name, not_null<DeclRef *> type)
+      : _name(std::move(name)), _type(type) {}
+};
+
 }  // namespace x::pt

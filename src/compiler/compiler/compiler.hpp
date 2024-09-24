@@ -50,11 +50,11 @@ class Compiler {
     context._voidTy->_llvmType = llvm::Type::getVoidTy(_ctx);
     context._boolTy->_llvmType = llvm::Type::getInt1Ty(_ctx);
 
-    for (auto const& struc : context._structs) {
-      to_llvm_type(struc);
+    for (ast::Type* type : context._types) {
+      to_llvm_type(type);
     }
 
-    for (auto const& fnctn : context._functions) {
+    for (ast::FnDecl* fnctn : context._functions) {
       spdlog::info("compiling function {} with name {}", fmt::ptr(fnctn),
                    fnctn->name());
       // we need to forward declare all functions

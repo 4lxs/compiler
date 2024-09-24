@@ -9,6 +9,7 @@ class Context;
 class Type;
 class LiteralTy;
 class StructTy;
+class EnumTy;
 
 class FnDecl;
 

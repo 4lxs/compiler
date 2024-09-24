@@ -19,16 +19,17 @@ class Call;
 class Block;
 class DeclRef;
 class FieldAccess;
-using Expr =
-    std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*, StructExpr*,
-                 Call*, Block*, DeclRef*, FieldAccess*>;
+using Expr = std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*,
+                          StructExpr*, Call*, Block*, DeclRef*, FieldAccess*>;
 
 struct FnParam;
 class FnDecl;
 class StructDecl;
 class VarDecl;
+class EnumDecl;
+class TypeDecl;
 using ValueDecl = std::variant<FnDecl*, VarDecl*>;
-using TopLevelDecl = std::variant<FnDecl*, StructDecl*>;
+using TopLevelDecl = std::variant<FnDecl*, StructDecl*, EnumDecl*, TypeDecl*>;
 
 class Return;
 class Assign;

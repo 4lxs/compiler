@@ -2,7 +2,6 @@ namespace x::sema {
 
 class Sema;
 
-class TypeRef;
-class Typer;
+struct TypeRef;
 
 }  // namespace x::sema

@@ -34,38 +34,41 @@ Ptr<ast::Context> Sema::finish() { return std::move(_ast); }
 void Sema::add(pt::Module const &module) {
   std::vector<std::pair<pt::FnDecl *, ast::FnDecl *>> functions;
   std::vector<std::pair<pt::StructDecl *, ast::StructTy *>> structs;
+  // std::vector<std::pair<pt::EnumDecl *, ast::EnumTy *>> enums;
+  std::vector<std::pair<pt::TypeDecl *, TypeRef>> types;
 
-  // first declare all top level decls. this is required for resolving
-  // references as they can be used before definition
+  // declare top level items. we can't define them yet as they may refer to
+  // each other
   for (pt::TopLevelDecl const &decl : module._items) {
     std::visit(overloaded{
                    [&, this](pt::FnDecl *func) {
+                     // we hold off on declaring functions as they may resolve
+                     // types
                      ast::FnDecl *newfn = ast::FnDecl::Allocate(*_ast);
                      functions.emplace_back(func, newfn);
                    },
                    [&, this](pt::StructDecl *decl) {
-                     auto *newStruct = ast::StructTy::Allocate(*_ast);
-                     structs.emplace_back(decl, newStruct);
-                   }
-                   // [&, this](pt::Type *const &type) {
-                   //   // ast::Type *newtype = ast::Type::Allocate(*_ast);
-                   //   // _ast->_types.push_back(newtype);
-                   //   // _maps.insert(type, newtype);
-                   // },
+                     auto *ast = ast::StructTy::Allocate(*_ast);
+                     structs.emplace_back(decl, ast);
+                     declare(ast, decl);
+                     env.add_type(ast);
+                     _ast->_types.push_back(ast);
+                   },
+                   [&, this](pt::EnumDecl *decl) {
+                     // auto *newEnum = ast::EnumTy::Allocate(*_ast);
+                     // enums.emplace_back(decl, newEnum);
+                     //   declare(ast, pt);
+                     //   env.add_type(ast);
+                     //   _ast->_enums.push_back(ast);
+                   },
+                   [&, this](pt::TypeDecl *decl) {
+                     TypeRef ref = env.declare_type(decl->_name);
+                     types.emplace_back(decl, ref);
+                   },
                },
                decl);
   }
 
-  // TODO: create types first, because functions may resolve them
-
-  for (auto const &[pt, ast] : structs) {
-    declare(ast, pt);
-    env.add_type(ast);
-    _ast->_structs.push_back(ast);
-  }
-
-  // next declare top level items. we can't define them yet as they may refer to
-  // each other
   for (auto const &[pt, ast] : functions) {
     declare(ast, pt);
     env.add_decl(ast);
@@ -74,6 +77,12 @@ void Sema::add(pt::Module const &module) {
 
   for (auto const &[pt, ast] : structs) {
     define(ast, pt);
+  }
+
+  for (auto [pt, ref] : types) {
+    ast::Type *ast = define(pt, ref);
+    env.define_type(ref, ast);
+    _ast->_types.push_back(ast);
   }
 
   for (auto const &[pt, ast] : functions) {
@@ -318,6 +327,27 @@ void Sema::define(ast::StructTy *ast, pt::StructDecl *pt) {
   //   auto *block = ast::Block::Create(*_ast, std::move(body),
   //   _ast->_voidExpr); constructor->define(block);
   // }
+}
+
+void Sema::declare(ast::StructTy *ast, pt::EnumDecl *pt) {
+  ast->Create(pt->_name);
+}
+
+void Sema::define(ast::StructTy *ast, pt::EnumDecl *pt) {
+  std::vector<std::string> variants;
+  variants.reserve(pt->_variants.size());
+
+  for (pt::EnumDecl::Variant const &variant : pt->_variants) {
+    variants.push_back(variant.name);
+  }
+
+  // ast->define(std::move(variants));
+}
+
+not_null<ast::Type *> Sema::define(pt::TypeDecl *pt, TypeRef ref) {
+  not_null<ast::Type *> ast = env.resolve_type(pt->_type);
+
+  return ast;
 }
 
 }  // namespace x::sema

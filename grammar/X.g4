@@ -2,7 +2,7 @@ grammar X;
 options { tokenVocab=XLexer; }
 
 program
-    : moddef (function | staticDef | structDef)+ EOF
+    : moddef (function | structDef | enumDef | typeDef)+ EOF
     ;
 
 // allow a; b; 5+3
@@ -18,12 +18,20 @@ moddef
 // statements
 //===
 
-staticDef
-    : Let name=Ident Cln path (Eq val=expr)? Sc
+typeDef
+    : Type name=Ident Eq path Sc
+    ;
+
+enumDef
+    : Enum name=Ident LBc (enumVariant (Cma enumVariant)* Cma?)? RBc
+    ;
+
+enumVariant
+    : name=Ident (Cln type)?
     ;
 
 varDef
-    : Let name=Ident Cln type=path (Eq val=expr)? Sc
+    : Let name=Ident Cln typ=path (Eq val=expr)? Sc
     ;
 
 varAssign
@@ -120,13 +128,13 @@ structExprField
 // Types
 //===
 
-// type
-//     : path #bareTy
-//     | LPrn RPrn #unitTy
-//     | LPrn (Ident Cln type (Cma Ident Cln type)*)? RPrn #structTy
-//     | LBk type Sc IntegerLiteral RBk #sliceTy
-//     | LPrn type (Cma type)* RPrn #tupleTy
-//     ;
+type
+    : path #bareTy
+    | LPrn RPrn #unitTy
+    | LPrn (Ident Cln type (Cma Ident Cln type)*)? RPrn #structTy
+    // | LBk type Sc IntegerLiteral RBk #sliceTy
+    | LPrn type (Cma type)* RPrn #tupleTy
+    ;
 
 //===
 // Path
@@ -152,6 +160,8 @@ True: 'true';
 False: 'false';
 Return: 'return';
 While: 'while';
+Enum: 'enum';
+Type: 'type';
 
 Eq: '=';
 EqEq: '==';

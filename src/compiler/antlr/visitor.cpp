@@ -194,7 +194,7 @@ std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
     val = _stack.pop();
   }
 
-  auto* type = pt::DeclRef::Create(*_ctx, get_path(ctx->type));
+  auto* type = pt::DeclRef::Create(*_ctx, get_path(ctx->typ));
 
   _block->add(pt::VarDecl::Create(*_ctx, std::move(name), type, val));
 
@@ -239,6 +239,34 @@ std::any Visitor::visitWhile(parser::XParser::WhileContext* ctx) {
   pt::Block* body = std::get<pt::Block*>(_stack.pop());
 
   _block->add(pt::While::Create(*_ctx, cond, body));
+
+  return {};
+}
+
+std::any Visitor::visitEnumDef(parser::XParser::EnumDefContext* ctx) {
+  std::vector<pt::EnumDecl::Variant> variants;
+
+  for (auto* variant : ctx->enumVariant()) {
+    variants.push_back(parse_variant(variant));
+  }
+
+  _module->define(
+      pt::EnumDecl::Create(*_ctx, ctx->name->getText(), std::move(variants)));
+
+  return {};
+}
+
+pt::EnumDecl::Variant Visitor::parse_variant(
+    parser::XParser::EnumVariantContext* ctx) {
+  return pt::EnumDecl::Variant{.name = ctx->name->getText()};
+}
+
+std::any Visitor::visitTypeDef(parser::XParser::TypeDefContext* ctx) {
+  pt::TypeDecl* decl =
+      pt::TypeDecl::Create(*_ctx, ctx->name->getText(),
+                           pt::DeclRef::Create(*_ctx, get_path(ctx->path())));
+
+  _module->define(decl);
 
   return {};
 }
@@ -303,26 +331,6 @@ pt::Path Visitor::get_path(parser::XParser::PathContext* ctx) {
   bool external = ctx->initSep != nullptr;
 
   return pt::Path{std::move(components), external};
-}
-
-pt::Expr Visitor::Stack_::pop() {
-  assert(!_stack.empty());
-
-  auto ret = _stack.back();
-  _stack.pop_back();
-  return ret;
-}
-
-std::vector<pt::Expr> Visitor::Stack_::pop(size_t cnt) {
-  assert(_stack.size() >= cnt);
-
-  auto start = _stack.end() - ssize_t(cnt);
-  auto end = _stack.end();
-  std::vector<pt::Expr> ret(std::move_iterator{start}, std::move_iterator{end});
-
-  _stack.erase(start, end);
-
-  return ret;
 }
 
 }  // namespace x

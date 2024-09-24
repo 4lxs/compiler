@@ -32,7 +32,7 @@ class Context {
  public:  // TODO: temp
   friend class sema::Sema;
   std::vector<FnDecl *> _functions;
-  std::vector<StructTy *> _structs;
+  std::vector<Type *> _types;
 
  public:  // TODO: friend doesn't work
   template <typename, typename>

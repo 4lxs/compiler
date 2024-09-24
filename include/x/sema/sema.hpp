@@ -30,6 +30,11 @@ class Sema {
   void declare(ast::StructTy* ast, pt::StructDecl* pt);
   void define(ast::StructTy* ast, pt::StructDecl* pt);
 
+  void declare(ast::StructTy* ast, pt::EnumDecl* pt);
+  void define(ast::StructTy* ast, pt::EnumDecl* pt);
+
+  not_null<ast::Type*> define(pt::TypeDecl* pt, TypeRef ref);
+
   ast::Return* check(pt::Return* stmt);
   ast::While* check(pt::While* stmt);
   ast::Assign* check(pt::Assign* stmt);

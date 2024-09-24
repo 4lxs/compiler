@@ -16,6 +16,7 @@ class Type {
   enum class TypeKind {
     Literal,
     Struct,
+    Union,
   };
 
   [[nodiscard]] std::string_view name() const { return _name; }
@@ -77,9 +78,30 @@ class StructTy : public Type, public AllowAlloc<Context, StructTy> {
   /// empty until define is called
   std::vector<FieldDecl*> _fields;
 
+  /// enums at the language level get converted to structs with two fields in
+  /// the ast. one is a number other is UnionTy
+  bool _isEnum = false;
+
  private:
   friend AllowAlloc;
   explicit StructTy(std::string_view name) : Type(TypeKind::Struct, name) {};
+
+ public:
+  static bool classof(Type const* type) {
+    return type->get_kind() == TypeKind::Struct;
+  }
+};
+
+class UnionTy : public Type, public AllowAlloc<Context, UnionTy> {
+ public:
+  void define(std::vector<Type*>&& types) { _variants = std::move(types); }
+
+  /// empty until define is called
+  std::vector<Type*> _variants;
+
+ private:
+  friend AllowAlloc;
+  explicit UnionTy(std::string_view name) : Type(TypeKind::Union, name) {};
 
  public:
   static bool classof(Type const* type) {

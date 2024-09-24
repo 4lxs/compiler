@@ -49,6 +49,12 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitWhile(parser::XParser::WhileContext *ctx) override;
 
+  std::any visitEnumDef(parser::XParser::EnumDefContext *ctx) override;
+
+  pt::EnumDecl::Variant parse_variant(parser::XParser::EnumVariantContext *ctx);
+
+  std::any visitTypeDef(parser::XParser::TypeDefContext *ctx) override;
+
   std::any visitMemberAccess(
       parser::XParser::MemberAccessContext *ctx) override;
 
@@ -73,23 +79,43 @@ class Visitor : public parser::XBaseVisitor {
   /// it has the value of the inner-most block
   pt::Block *_block{};
 
-  class Stack_ {
+  template <typename T>
+  class Stack {
    public:
     /// Expr is a variant. emplacing allows you to do push(A) instead of
     /// push(Expr(a))
-    template <typename TExpr>
-    constexpr void push(TExpr expr) {
-      _stack.emplace_back(expr);
-    };
+    constexpr void push(auto expr) { _stack.emplace_back(expr); };
 
-    pt::Expr pop();
-    std::vector<pt::Expr> pop(size_t cnt);
+    T pop() {
+      assert(!_stack.empty());
+
+      auto ret = _stack.back();
+      _stack.pop_back();
+      return ret;
+    }
+
+    std::vector<T> pop(size_t cnt) {
+      assert(_stack.size() >= cnt);
+
+      auto start = _stack.end() - ssize_t(cnt);
+      auto end = _stack.end();
+      std::vector<pt::Expr> ret(std::move_iterator{start},
+                                std::move_iterator{end});
+
+      _stack.erase(start, end);
+
+      return ret;
+    }
+
     [[nodiscard]] auto size() const { return _stack.size(); }
 
    private:
     // stack for storing values. std::any doesn't allow non-copyable types
     std::vector<pt::Expr> _stack;
-  } _stack;
+    // std::vector<pt::Type> _stack;
+  };
+
+  Stack<pt::Expr> _stack;
 };
 
 }  // namespace x
