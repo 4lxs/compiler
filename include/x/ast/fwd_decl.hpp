@@ -16,6 +16,7 @@ class Stmt;
 class Return;
 class VarDecl;
 class Assign;
+class While;
 class Decl;
 
 class Expr;

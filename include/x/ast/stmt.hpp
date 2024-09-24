@@ -12,6 +12,7 @@ class Stmt {
     SK_Function,
     SK_VarDecl,
     SK_Assign,
+    SK_While,
 
     SK_Expr,
     SK_Int,
@@ -68,6 +69,20 @@ class Assign : public Stmt, public AllowAlloc<Context, Assign> {
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_Assign;
   }
+};
+
+class While : public Stmt, public AllowAlloc<Context, While> {
+ public:
+  not_null<Expr*> _cond;
+  not_null<Block*> _body;
+
+ private:
+  friend AllowAlloc;
+  While(not_null<Expr*> cond, not_null<Block*> body)
+      : Stmt(StmtKind::SK_While), _cond(cond), _body(body) {}
+
+ public:
+  static bool classof(Stmt const* expr) { return expr->get_kind() == SK_While; }
 };
 
 }  // namespace x::ast

@@ -32,6 +32,7 @@ using TopLevelDecl = std::variant<FnDecl*, StructDecl*>;
 
 class Return;
 class Assign;
-using Stmt = std::variant<Expr, Return*, VarDecl*, Assign*>;
+class While;
+using Stmt = std::variant<Expr, Return*, VarDecl*, Assign*, While*>;
 
 }  // namespace x::pt

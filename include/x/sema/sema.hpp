@@ -31,6 +31,7 @@ class Sema {
   void define(ast::StructTy* ast, pt::StructDecl* pt);
 
   ast::Return* check(pt::Return* stmt);
+  ast::While* check(pt::While* stmt);
   ast::Assign* check(pt::Assign* stmt);
   ast::VarDecl* check(pt::VarDecl* stmt);
   not_null<ast::Expr*> check(pt::Expr& expr);

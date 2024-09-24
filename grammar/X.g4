@@ -56,12 +56,17 @@ stmt
     | varAssign
     | structDef
     | return
+    | while
     // | function
     | Sc
     ;
 
 return
     : Return expr? Sc
+    ;
+
+while
+    : While expr block
     ;
 
 if_
@@ -146,6 +151,7 @@ Else: 'else';
 True: 'true';
 False: 'false';
 Return: 'return';
+While: 'while';
 
 Eq: '=';
 EqEq: '==';

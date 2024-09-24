@@ -32,4 +32,16 @@ class Assign : public AllowAlloc<Context, Assign> {
       : _assignee(assignee), _value(value) {}
 };
 
+class While : public AllowAlloc<Context, While> {
+  friend AllowAlloc;
+
+ public:
+  Expr _cond;
+  not_null<Block*> _body;
+
+ private:
+  explicit While(Expr cond, not_null<Block*> body)
+      : _cond(cond), _body(body) {}
+};
+
 }  // namespace x::pt

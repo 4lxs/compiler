@@ -8,6 +8,7 @@
 #include "x/pt/decl.hpp"
 #include "x/pt/expr.hpp"
 #include "x/pt/module.hpp"
+#include "x/pt/stmt.hpp"
 
 namespace x {
 
@@ -227,6 +228,17 @@ std::any Visitor::visitStructDef(parser::XParser::StructDefContext* ctx) {
 
   _module->define(
       pt::StructDecl::Create(*_ctx, ctx->name->getText(), std::move(fields)));
+
+  return {};
+}
+
+std::any Visitor::visitWhile(parser::XParser::WhileContext* ctx) {
+  visit(ctx->expr());
+  pt::Expr cond = _stack.pop();
+  visitBlock(ctx->block());
+  pt::Block* body = std::get<pt::Block*>(_stack.pop());
+
+  _block->add(pt::While::Create(*_ctx, cond, body));
 
   return {};
 }

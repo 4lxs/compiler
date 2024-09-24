@@ -105,7 +105,7 @@ class Compiler {
         // all functions should live in context._functions
       case ast::Stmt::SK_Expr:
       case ast::Stmt::SK_ExprEnd:
-        std::unreachable();
+        throw std::runtime_error("unexpected stmt");
       case ast::Stmt::SK_Builtin:
         break;
       case ast::Stmt::SK_VarDecl: {
@@ -125,6 +125,27 @@ class Compiler {
       case ast::Stmt::SK_FieldAccess: {
         assert(false);
       } break;
+      case ast::Stmt::SK_While:
+        auto* ass = llvm::cast<ast::While>(stmt);
+
+        auto* cond = llvm::BasicBlock::Create(_ctx, "wCond", _currentFunction);
+        auto* body = llvm::BasicBlock::Create(_ctx, "wBody");
+        auto* end = llvm::BasicBlock::Create(_ctx, "wEnd");
+
+        _builder.CreateBr(cond);
+
+        _builder.SetInsertPoint(cond);
+        Value condVal = eval(ass->_cond);
+        _builder.CreateCondBr(get_deref(condVal), body, end);
+
+        _builder.SetInsertPoint(body);
+        _currentFunction->insert(_currentFunction->end(), body);
+        compile(ass->_body);
+        _builder.CreateBr(cond);
+
+        _currentFunction->insert(_currentFunction->end(), end);
+        _builder.SetInsertPoint(end);
+        break;
     }
   }
 
@@ -217,7 +238,7 @@ class Compiler {
                                        get_deref(eval(builtin->_args.at(1))))};
           case ast::Builtin::Op::Start2:
           case ast::Builtin::Op::Start3:
-            std::unreachable();
+            throw std::runtime_error("invalid builtin");
           case ast::Builtin::Op::iSub:
             return Value{
                 _builder.CreateSub(get_deref(eval(builtin->_args.at(0))),
@@ -255,13 +276,18 @@ class Compiler {
 
         return Value{ptr, fieldAccess->type()->_llvmType};
       }
+      case ast::Stmt::SK_Expr:
+        // expr is used for void
+        return Value{llvm::UndefValue::get(llvm::Type::getVoidTy(_ctx))};
       case ast::Stmt::SK_Return:
       case ast::Stmt::SK_Function:
       case ast::Stmt::SK_VarDecl:
       case ast::Stmt::SK_Assign:
-      case ast::Stmt::SK_Expr:
       case ast::Stmt::SK_ExprEnd:
-        std::unreachable();
+      case ast::Stmt::SK_While:
+        throw std::runtime_error(
+            fmt::format("unexpected stmt {} when expression was expected",
+                        fmt::underlying(expr->get_kind())));
     }
   }
 

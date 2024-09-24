@@ -157,6 +157,13 @@ ast::Assign *Sema::check(pt::Assign *stmt) {
   return ast::Assign::Create(*_ast, assignee, val);
 }
 
+ast::While *Sema::check(pt::While *stmt) {
+  ast::Expr *cond = check(stmt->_cond);
+  ast::Block *body = check(*stmt->_body);
+
+  return ast::While::Create(*_ast, cond, body);
+}
+
 not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
   return std::visit(
       overloaded{

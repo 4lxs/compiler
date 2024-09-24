@@ -47,6 +47,8 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitStructDef(parser::XParser::StructDefContext *ctx) override;
 
+  std::any visitWhile(parser::XParser::WhileContext *ctx) override;
+
   std::any visitMemberAccess(
       parser::XParser::MemberAccessContext *ctx) override;
 
