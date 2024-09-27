@@ -11,32 +11,25 @@
 
 namespace x::ast {
 
-class Type {
+class Type : public Decl {
  public:
-  enum class TypeKind {
-    Literal,
-    Struct,
-    Union,
-  };
-
   [[nodiscard]] std::string_view name() const { return _name; }
 
-  [[nodiscard]] TypeKind get_kind() const { return _kind; }
-
  protected:
-  explicit Type(TypeKind kind, std::string_view name)
-      : _name(name), _kind(kind) {};
+  explicit Type(DeclKind kind, std::string_view name) : Decl(kind, name) {};
 
  private:
-  std::string_view _name;
-  TypeKind _kind;
-
+ public:
   //===
   // compiler data
   //===
 
- public:
   llvm::Type* _llvmType{};
+
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() >= DeclKind::Type &&
+           decl->get_kind() < DeclKind::TypeEnd;
+  }
 };
 
 class LiteralTy : public Type, public AllowAlloc<Context, LiteralTy> {
@@ -53,20 +46,24 @@ class LiteralTy : public Type, public AllowAlloc<Context, LiteralTy> {
 
  private:
   LiteralTy(Kind kind, std::string_view name)
-      : Type(TypeKind::Literal, name), _kind(kind) {};
+      : Type(DeclKind::Literal, name), _kind(kind) {};
 
  public:
-  static bool classof(Type const* type) {
-    return type->get_kind() == TypeKind::Literal;
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Literal;
   }
 };
 
 class StructTy : public Type, public AllowAlloc<Context, StructTy> {
  public:
-  void define(std::vector<FieldDecl*>&& fields) { _fields = std::move(fields); }
+  void define(std::vector<FieldDecl*>&& fields) {
+    spdlog::info("defining struct '{}' with {} fields", name(), fields.size());
+    _fields = std::move(fields);
+  }
 
   not_null<FieldDecl*> get_field(std::string_view field_name) {
     for (FieldDecl* field : _fields) {
+      spdlog::info("checking field '{}'", field->name());
       if (field->name() == field_name) {
         return field;
       }
@@ -80,15 +77,15 @@ class StructTy : public Type, public AllowAlloc<Context, StructTy> {
 
   /// enums at the language level get converted to structs with two fields in
   /// the ast. one is a number other is UnionTy
-  bool _isEnum = false;
+  // bool _isEnum = false;
 
  private:
   friend AllowAlloc;
-  explicit StructTy(std::string_view name) : Type(TypeKind::Struct, name) {};
+  explicit StructTy(std::string_view name) : Type(DeclKind::Struct, name) {};
 
  public:
-  static bool classof(Type const* type) {
-    return type->get_kind() == TypeKind::Struct;
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Struct;
   }
 };
 
@@ -101,11 +98,11 @@ class UnionTy : public Type, public AllowAlloc<Context, UnionTy> {
 
  private:
   friend AllowAlloc;
-  explicit UnionTy(std::string_view name) : Type(TypeKind::Union, name) {};
+  explicit UnionTy(std::string_view name) : Type(DeclKind::Union, name) {};
 
  public:
-  static bool classof(Type const* type) {
-    return type->get_kind() == TypeKind::Struct;
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Struct;
   }
 };
 

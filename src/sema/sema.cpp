@@ -22,7 +22,7 @@
 namespace x::sema {
 
 Sema::Sema(pt::Context *ctx) : _pt(ctx) {
-  env.add_type(_ast->_int32Ty);
+  env.add(_ast->_int32Ty);
 
   for (auto const &module : ctx->_modules) {
     add(*module);
@@ -34,24 +34,22 @@ Ptr<ast::Context> Sema::finish() { return std::move(_ast); }
 void Sema::add(pt::Module const &module) {
   std::vector<std::pair<pt::FnDecl *, ast::FnDecl *>> functions;
   std::vector<std::pair<pt::StructDecl *, ast::StructTy *>> structs;
+  std::vector<std::pair<pt::MethodDecl *, ast::FnDecl *>> methods;
   // std::vector<std::pair<pt::EnumDecl *, ast::EnumTy *>> enums;
-  std::vector<std::pair<pt::TypeDecl *, TypeRef>> types;
+  std::vector<pt::TypeDecl *> types;
 
   // declare top level items. we can't define them yet as they may refer to
   // each other
   for (pt::TopLevelDecl const &decl : module._items) {
     std::visit(overloaded{
                    [&, this](pt::FnDecl *func) {
-                     // we hold off on declaring functions as they may resolve
-                     // types
-                     ast::FnDecl *newfn = ast::FnDecl::Allocate(*_ast);
+                     auto *newfn = ast::FnDecl::Allocate(*_ast);
                      functions.emplace_back(func, newfn);
                    },
                    [&, this](pt::StructDecl *decl) {
-                     auto *ast = ast::StructTy::Allocate(*_ast);
+                     auto *ast = ast::StructTy::Create(*_ast, decl->_name);
                      structs.emplace_back(decl, ast);
                      declare(ast, decl);
-                     env.add_type(ast);
                      _ast->_types.push_back(ast);
                    },
                    [&, this](pt::EnumDecl *decl) {
@@ -61,17 +59,30 @@ void Sema::add(pt::Module const &module) {
                      //   env.add_type(ast);
                      //   _ast->_enums.push_back(ast);
                    },
-                   [&, this](pt::TypeDecl *decl) {
-                     TypeRef ref = env.declare_type(decl->_name);
-                     types.emplace_back(decl, ref);
+                   [&](pt::TypeDecl *decl) { types.emplace_back(decl); },
+                   [&, this](pt::MethodDecl *decl) {
+                     ast::FnDecl *newfn = ast::FnDecl::Allocate(*_ast);
+                     methods.emplace_back(decl, newfn);
                    },
                },
                decl);
   }
 
+  /// we hold off due to type aliases
+  for (pt::TypeDecl *type : types) {
+    // ast::Type *ref = env.resolve_type(type->_type);
+    // env.alias(type->_name, ref);
+  }
+
+  // we hold off on declaring functions as they may resolve
+  // types
   for (auto const &[pt, ast] : functions) {
     declare(ast, pt);
-    env.add_decl(ast);
+    _ast->_functions.push_back(ast);
+  }
+
+  for (auto const &[pt, ast] : methods) {
+    declare(ast, pt, pt);
     _ast->_functions.push_back(ast);
   }
 
@@ -79,19 +90,17 @@ void Sema::add(pt::Module const &module) {
     define(ast, pt);
   }
 
-  for (auto [pt, ref] : types) {
-    ast::Type *ast = define(pt, ref);
-    env.define_type(ref, ast);
-    _ast->_types.push_back(ast);
-  }
-
   for (auto const &[pt, ast] : functions) {
     define(ast, pt);
+  }
+
+  for (auto const &[pt, ast] : methods) {
+    define(ast, pt, pt);
   }
 }
 
 ast::Block *Sema::check(pt::Block &block) {
-  SymbolTable::BlockRef ref = env.scope_begin();
+  env.scope_begin();
 
   std::vector<ast::Stmt *> body;
   for (pt::Stmt &stmt : block._body) {
@@ -109,7 +118,7 @@ ast::Block *Sema::check(pt::Block &block) {
                      // we need to evaluate expression before adding variable to
                      // env to avoid referencing itself
                      if (!stmt->_val.has_value()) {
-                       env.add_decl(decl);
+                       env.add(decl);
                        return;
                      }
 
@@ -118,7 +127,7 @@ ast::Block *Sema::check(pt::Block &block) {
                      auto *assign = ast::Assign::Create(*_ast, lhs, val);
 
                      body.push_back(assign);
-                     env.add_decl(decl);
+                     env.add(decl);
                    },
                    [this, &body](pt::Expr &stmt) {
                      body.push_back(static_cast<ast::Stmt *>(check(stmt)));
@@ -130,7 +139,7 @@ ast::Block *Sema::check(pt::Block &block) {
   not_null<ast::Expr *> terminator =
       block._end.has_value() ? check(block._end.value()) : _ast->_voidExpr;
 
-  env.scope_end(ref);
+  env.scope_end();
 
   return ast::Block::Create(*_ast, std::move(body), terminator);
 }
@@ -272,9 +281,23 @@ not_null<ast::Expr *> Sema::check(pt::Expr &expr) {
       expr);
 }
 
-void Sema::declare(ast::FnDecl *ast, pt::FnDecl *pt) {
+void Sema::declare(ast::FnDecl *ast, pt::FnDecl *pt, pt::MethodDecl *method) {
+  bool hasSelf = method != nullptr && !method->_isStatic;
+
   std::vector<ast::FnDecl::Param> params;
-  params.reserve(pt->_params.size());
+  params.reserve(pt->_params.size() + (hasSelf ? 1 : 0));
+
+  if (method != nullptr) {
+    ast::Type *recvtyp = env.resolve_type(method->_recv);
+
+    if (hasSelf) {
+      params.push_back(ast::FnDecl::Param(pt->name(), recvtyp));
+    }
+
+    pt->_mangledName = fmt::format("{}%s{}", recvtyp->name(), pt->name());
+  } else {
+    pt->_mangledName = pt->name();
+  }
 
   for (auto const &[_, type] : pt->_params) {
     ast::Type *restype = env.resolve_type(type);
@@ -283,17 +306,19 @@ void Sema::declare(ast::FnDecl *ast, pt::FnDecl *pt) {
 
   ast::Type *type = env.resolve_type(pt->_retTy);
 
-  ast->Create(pt->name(), std::move(params), type);
+  ast->Create(pt->_mangledName, std::move(params), type);
+
+  env.add(ast);
 }
 
-void Sema::define(ast::FnDecl *ast, pt::FnDecl *pt) {
+void Sema::define(ast::FnDecl *ast, pt::FnDecl *pt, pt::MethodDecl *method) {
   ast::Block *body = check(*pt->_body);
 
   ast->define(body);
 }
 
 void Sema::declare(ast::StructTy *ast, pt::StructDecl *pt) {
-  ast->Create(pt->_name);
+  env.add(ast);
 
   // {
   //   std::vector<ast::FnDecl::Param> params;
@@ -314,7 +339,11 @@ void Sema::define(ast::StructTy *ast, pt::StructDecl *pt) {
   for (pt::StructDecl::Field const &field : pt->_fields) {
     ast::Type *type = env.resolve_type(field.type);
     auto ix = static_cast<uint8_t>(fields.size());
-    fields.push_back(ast::FieldDecl::Create(*_ast, field.name, type, ix));
+
+    auto *ast = ast::FieldDecl::Create(*_ast, field.name, type, ix);
+
+    fields.push_back(ast);
+    env.add(ast);
   }
 
   ast->define(std::move(fields));
@@ -344,7 +373,7 @@ void Sema::define(ast::StructTy *ast, pt::EnumDecl *pt) {
   // ast->define(std::move(variants));
 }
 
-not_null<ast::Type *> Sema::define(pt::TypeDecl *pt, TypeRef ref) {
+not_null<ast::Type *> Sema::define(pt::TypeDecl *pt, ast::Type *ref) {
   not_null<ast::Type *> ast = env.resolve_type(pt->_type);
 
   return ast;

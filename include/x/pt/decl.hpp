@@ -14,7 +14,7 @@ struct FnParam {
   DeclRef *type;
 };
 
-class FnDecl : public AllowAlloc<Context, FnDecl> {
+class FnDecl : private AllowAlloc<Context, FnDecl> {
  public:
   [[nodiscard]] std::string const &name() const { return _name; };
 
@@ -25,8 +25,11 @@ class FnDecl : public AllowAlloc<Context, FnDecl> {
   not_null<Block *> _body;
 
   std::string _name;
+  std::string _mangledName;
 
- private:
+  using AllowAlloc::Create;
+
+ protected:
   friend AllowAlloc;
   FnDecl(std::string name, std::vector<FnParam> &&params, DeclRef *retTy,
          not_null<Block *> body)
@@ -34,6 +37,26 @@ class FnDecl : public AllowAlloc<Context, FnDecl> {
         _retTy(retTy),
         _body(body),
         _name(std::move(name)) {}
+};
+
+class MethodDecl : public FnDecl, private AllowAlloc<Context, MethodDecl> {
+ public:
+  /// the type of the receiver
+  /// in Foo::bar(), Foo is the receiver
+  DeclRef *_recv;
+
+  /// if it's not static, it has a self
+  bool _isStatic;
+
+  using AllowAlloc<Context, MethodDecl>::Create;
+
+ private:
+  friend AllowAlloc<Context, MethodDecl>;
+  MethodDecl(DeclRef *recv, std::string name, std::vector<FnParam> &&params,
+             DeclRef *retTy, not_null<Block *> body, bool isStatic)
+      : FnDecl(std::move(name), std::move(params), retTy, body),
+        _recv(recv),
+        _isStatic(isStatic) {}
 };
 
 class VarDecl : public AllowAlloc<Context, VarDecl> {

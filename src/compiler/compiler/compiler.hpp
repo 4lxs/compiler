@@ -203,6 +203,9 @@ class Compiler {
       case ast::Stmt::SK_Call: {
         auto const& call = llvm::cast<ast::FnCall>(expr);
         llvm::Function* calee = _mod.getFunction(call->_fn->name());
+        spdlog::info("calling function {} with {} params with {} args",
+                     call->_fn->name(), calee->arg_size(),
+                     call->_args->_fields.size());
         assert(calee);
         assert(calee->arg_size() == call->_args->_fields.size());
 
@@ -322,7 +325,7 @@ class Compiler {
     }
 
     switch (type->get_kind()) {
-      case ast::Type::TypeKind::Struct: {
+      case ast::Type::DeclKind::Struct: {
         auto* structTy = llvm::cast<ast::StructTy>(type);
         // structTy->_fields
 
@@ -337,8 +340,17 @@ class Compiler {
 
         return type->_llvmType;
       }
-      case ast::Type::TypeKind::Literal:
+      case ast::Type::DeclKind::Literal:
         throw std::runtime_error("literal types should have been created");
+      case ast::Decl::DeclKind::ValueBegin:
+      case ast::Decl::DeclKind::Fn:
+      case ast::Decl::DeclKind::Var:
+      case ast::Decl::DeclKind::Field:
+      case ast::Decl::DeclKind::ValueEnd:
+      case ast::Decl::DeclKind::Type:
+      case ast::Decl::DeclKind::Union:
+      case ast::Decl::DeclKind::TypeEnd:
+        throw std::runtime_error("unexpected type");
     }
   }
 

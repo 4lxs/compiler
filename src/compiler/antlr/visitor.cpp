@@ -34,8 +34,45 @@ std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
 
   auto* retType = pt::DeclRef::Create(*_ctx, get_path(ctx->ret));
 
+  auto [params, isStatic] = [&, ctx = ctx->params()]() {
+    auto parse_param = [&](parser::XParser::ParamContext* param) {
+      auto* name = param->Ident();
+      auto* type = param->path();
+      auto* typeref = pt::DeclRef::Create(*_ctx, get_path(type));
+      return pt::FnParam{name->getText(), typeref};
+    };
+
+    std::vector<pt::FnParam> params;
+    std::vector<parser::XParser::ParamContext*> ctxParams = ctx->param();
+    params.reserve(ctxParams.size());
+    for (auto* param : ctxParams) {
+      params.emplace_back(parse_param(param));
+    }
+
+    bool isStatic = true;
+    if (ctx->self != nullptr) {
+      assert(ctx->self->getText() == "this");
+      isStatic = false;
+    }
+
+    return std::make_pair(params, isStatic);
+  }();
+
+  if (ctx->class_ != nullptr) {
+    pt::DeclRef* recv = pt::DeclRef::Create(*_ctx, get_path(ctx->class_));
+    auto* method =
+        pt::MethodDecl::Create(*_ctx, recv, ctx->name->getText(),
+                               std::move(params), retType, body, isStatic);
+
+    _module->define(method);
+
+    return {};
+  }
+
+  assert(isStatic);
+
   auto* func = pt::FnDecl::Create(*_ctx, ctx->name->getText(),
-                                  parse_params(ctx->params()), retType, body);
+                                  std::move(params), retType, body);
 
   _module->define(func);
 
@@ -303,22 +340,6 @@ pt::StructDecl::Field Visitor::parse_field(
       .type = pt::DeclRef::Create(*_ctx, get_path(ctx->path())),
       .defaultVal = defVal,
   };
-}
-
-std::vector<pt::FnParam> Visitor::parse_params(
-    parser::XParser::ParamsContext* ctx) {
-  auto names = ctx->Ident();
-  auto types = ctx->path();
-  assert(names.size() == types.size());
-
-  std::vector<pt::FnParam> params;
-  params.reserve(names.size());
-  for (auto&& [name, type] : std::views::zip(names, types)) {
-    auto* typeref = pt::DeclRef::Create(*_ctx, get_path(type));
-    params.emplace_back(name->getText(), typeref);
-  }
-
-  return params;
 }
 
 pt::Path Visitor::get_path(parser::XParser::PathContext* ctx) {

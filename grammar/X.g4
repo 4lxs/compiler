@@ -11,7 +11,7 @@ program
 //     ;
 
 moddef
-    : Module initSep=ClnCln? (Ident ClnCln)* Ident? Sc
+    : Module initSep=Dot? (Ident Dot)* Ident? Sc
     ;
 
 //===
@@ -46,11 +46,15 @@ structField
     ;
 
 function
-    : Fn name=Ident params (To ret=path)? body=block
+    : Fn (class=path Dot)? name=Ident params (To ret=path)? body=block
+    ;
+
+param
+    : Ident Cln path
     ;
 
 params
-    : LPrn (Ident Cln path (Cma Ident Cln path)*)? RPrn;
+    : LPrn ((self=Ident | param) (Cma param)*)? RPrn;
 
 block
     : LBc stmt* terminator=expr? RBc
@@ -140,7 +144,7 @@ type
 // Path
 //===
 
-path: initSep=ClnCln? (Ident ClnCln)* Ident;
+path: initSep=Dot? (Ident Dot)* Ident;
 
 //===
 // Lexer
@@ -168,7 +172,6 @@ EqEq: '==';
 
 Cma: ',';
 Dot: '.';
-ClnCln: '::';
 Cln: ':';
 Sc: ';';
 To: '->';

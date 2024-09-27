@@ -1,7 +1,8 @@
 namespace x::sema {
 
 class Sema;
-
-struct TypeRef;
+class TypeRef;
+class DeclRef;
+class SymbolTable;
 
 }  // namespace x::sema

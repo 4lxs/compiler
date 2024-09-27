@@ -1,7 +1,5 @@
 #pragma once
 
-#include <map>
-
 #include "x/ast/context.hpp"
 #include "x/ast/fwd_decl.hpp"
 #include "x/common.hpp"
@@ -24,8 +22,10 @@ class Sema {
   Ptr<ast::Context> finish();
 
  private:
-  void declare(ast::FnDecl* ast, pt::FnDecl* pt);
-  void define(ast::FnDecl* ast, pt::FnDecl* pt);
+  void declare(ast::FnDecl* ast, pt::FnDecl* pt,
+               pt::MethodDecl* method = nullptr);
+  void define(ast::FnDecl* ast, pt::FnDecl* pt,
+              pt::MethodDecl* method = nullptr);
 
   void declare(ast::StructTy* ast, pt::StructDecl* pt);
   void define(ast::StructTy* ast, pt::StructDecl* pt);
@@ -33,7 +33,7 @@ class Sema {
   void declare(ast::StructTy* ast, pt::EnumDecl* pt);
   void define(ast::StructTy* ast, pt::EnumDecl* pt);
 
-  not_null<ast::Type*> define(pt::TypeDecl* pt, TypeRef ref);
+  not_null<ast::Type*> define(pt::TypeDecl* pt, ast::Type* ref);
 
   ast::Return* check(pt::Return* stmt);
   ast::While* check(pt::While* stmt);

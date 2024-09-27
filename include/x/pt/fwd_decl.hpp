@@ -24,12 +24,13 @@ using Expr = std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*,
 
 struct FnParam;
 class FnDecl;
+class MethodDecl;
 class StructDecl;
 class VarDecl;
 class EnumDecl;
 class TypeDecl;
 using ValueDecl = std::variant<FnDecl*, VarDecl*>;
-using TopLevelDecl = std::variant<FnDecl*, StructDecl*, EnumDecl*, TypeDecl*>;
+using TopLevelDecl = std::variant<FnDecl*, StructDecl*, EnumDecl*, TypeDecl*, MethodDecl*>;
 
 class Return;
 class Assign;

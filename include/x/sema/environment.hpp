@@ -1,100 +1,124 @@
 #pragma once
 
+#include <concepts>
+#include <map>
 #include <vector>
 
+#include "fwd_decl.hpp"
 #include "spdlog/spdlog.h"
 #include "x/ast/decl.hpp"
 #include "x/ast/fwd_decl.hpp"
 #include "x/ast/type.hpp"
+#include "x/pt/expr.hpp"
 #include "x/pt/fwd_decl.hpp"
 
 namespace x::sema {
 
-struct TypeRef {
-  int32_t index;
+class LookupResult {
+ public:
+  enum class ResultType {
+    /// didn't find shit
+    NotFound,
+
+    /// found a single item
+    Found,
+
+    /// found multiple function items that you need to disambiguate
+    Overloaded,
+
+    /// found multiple items with the same name that you cannot disambiguate
+    Ambiguous,
+  };
+
+  [[nodiscard]] ast::Decl *get_single() const;
+
+  ResultType _kind = ResultType::NotFound;
+
+  std::vector<ast::Decl *> _decls;
 };
 
-struct DeclRef {
-  int32_t index;
+/// represents a collection of named items that you can lookup
+/// it's single level, but it's item can be itself a namespace
+///
+/// in language, a namespace may be a module, a class, a scope, ... anything
+/// that may contain named items
+///
+/// this class is intended to be subclassed
+class Namespace {
+  using Item = std::variant<ast::Decl *>;
+
+ public:
+  [[nodiscard]] Ptr<LookupResult> lookup(std::span<std::string> path) const;
+
+  [[nodiscard]] Ptr<LookupResult> lookup(std::string &name) const {
+    return lookup({&name, 1});
+  };
+
+  void insert(ast::Decl *val) { _items.insert({val->name(), val}); }
+
+  /// explicitly don't infer name from decl
+  void insert(std::string_view name, ast::Decl *val) {
+    auto [itr, inserted] = _items.insert({name, val});
+    if (!inserted) {
+      throw std::runtime_error("inserted duplicate");
+    }
+  }
+
+  [[nodiscard]] size_t size() const { return _items.size(); };
+
+ private:
+  std::map<std::string_view, ast::Decl *> _items;
 };
+
+std::string_view mangle_name(ast::Decl *decl);
 
 class SymbolTable {
  public:
  private:
-  struct Ident {
-    std::string_view name;
-    std::variant<DeclRef, TypeRef> val;
-  };
-
  public:
-  [[nodiscard]] not_null<ast::Decl *> resolve_decl(
-      not_null<pt::DeclRef *> var) {
-    Ident ident = resolve(var);
-    if (auto *decl = std::get_if<DeclRef>(&ident.val)) {
-      return get_decl(*decl);
-    }
-    throw std::runtime_error(fmt::format("expected decl {}", ident.name));
-  }
-
-  [[nodiscard]] not_null<ast::Type *> resolve_type(
-      not_null<pt::DeclRef *> var) {
-    Ident ident = resolve(var);
-    if (auto *type = std::get_if<TypeRef>(&ident.val)) {
-      return get_type(*type);
-    }
-    throw std::runtime_error(fmt::format("expected type {}", ident.name));
-  }
-
-  void add_decl(not_null<ast::Decl *> decl) {
-    spdlog::info("adding {}.", decl->name());
-    _env.push_back(Ident{decl->name(), DeclRef{int32_t(_decls.size())}});
-    _decls.push_back(decl);
-  }
-
-  TypeRef add_type(not_null<ast::Type *> type) {
-    spdlog::info("adding type {}.", type->name());
-    TypeRef ref{int32_t(_types.size())};
-    _env.push_back(Ident{type->name(), ref});
-    _types.push_back(type);
+  [[nodiscard]] ast::ValueDecl *resolve_decl(not_null<pt::DeclRef *> var) {
+    auto *ref = resolve<ast::ValueDecl>(var);
+    spdlog::info("resolved decl {}. as {}", ref->name(),
+                 fmt::underlying(ref->get_kind()));
     return ref;
   }
 
-  TypeRef declare_type(std::string_view name) {
-    spdlog::info("declaring type {}.", name);
-    TypeRef ref{int32_t(_types.size())};
-    _env.push_back(Ident{name, ref});
-    _types.push_back(nullptr);
-    return ref;
+  [[nodiscard]] ast::Type *resolve_type(not_null<pt::DeclRef *> var) {
+    return resolve<ast::Type>(var);
   }
 
-  void define_type(TypeRef ref, not_null<ast::Type *> def) {
-    spdlog::info("defining type {}.", def->name());
-    ast::Type *&type = get_type(ref);
-    assert(type == nullptr);
-    type = def;
+  void add(not_null<ast::Decl *> decl) {
+    spdlog::info("adding decl {} {}.", decl->name(),
+                 fmt::underlying(decl->get_kind()));
+    _items.push_back(decl);
   }
 
-  using BlockRef = size_t;
+  void scope_begin() {
+    spdlog::info("adding scope.");
+    _items.push_back(nullptr);
+  }
 
-  [[nodiscard]] BlockRef scope_begin() const { return _env.size(); }
-
-  void scope_end(BlockRef ref) {
-    _env.erase(_env.begin() + long(ref), _env.end());
+  void scope_end() {
+    spdlog::info("removing scope");
+    auto itr = std::find(_items.rbegin(), _items.rend(), nullptr);
+    _items.erase(itr.base(), _items.end());
   }
 
  private:
-  [[nodiscard]] ast::Decl *&get_decl(DeclRef ref) {
-    return _decls.at(size_t(ref.index));
+  [[nodiscard]] Ptr<LookupResult> lookup(not_null<pt::DeclRef *> var) const;
+  [[nodiscard]] LookupResult lookup(std::string_view name) const;
+
+  template <typename T>
+    requires std::derived_from<T, ast::Decl>
+  [[nodiscard]] T *resolve(not_null<pt::DeclRef *> declref) {
+    Ptr<LookupResult> ident = lookup(declref);
+    if (auto *ref = llvm::dyn_cast<T>(ident->get_single())) {
+      return ref;
+    }
+    throw std::runtime_error("unexpected");
   }
 
-  [[nodiscard]] ast::Type *&get_type(TypeRef ref) {
-    return _types.at(size_t(ref.index));
-  }
-
-  [[nodiscard]] Ident resolve(not_null<pt::DeclRef *> var) const;
-
-  std::vector<Ident> _env;
-  std::vector<ast::Decl *> _decls;
-  std::vector<ast::Type *> _types;
+  std::vector<ast::Decl *> _items;
 };
+
 };  // namespace x::sema

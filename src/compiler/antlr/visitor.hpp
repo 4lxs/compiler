@@ -63,9 +63,6 @@ class Visitor : public parser::XBaseVisitor {
   pt::StructDecl::Field parse_field(parser::XParser::StructFieldContext *ctx);
 
   [[nodiscard]]
-  std::vector<pt::FnParam> parse_params(parser::XParser::ParamsContext *ctx);
-
-  [[nodiscard]]
   static pt::Path get_path(parser::XParser::PathContext *ctx);
 
   pt::Context *_ctx;
