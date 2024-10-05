@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "x/ast/fwd_decl.hpp"
+#include "x/ast/stmt.hpp"
 #include "x/common.hpp"
 
 namespace x::ast {
@@ -71,44 +72,37 @@ class FnDecl : public ValueDecl {
   };
 
   FnDecl(std::string_view name, std::vector<Param>&& params, Rc<Type> ret,
-         Ptr<Block> block);
+         Ptr<Block> block, std::vector<Rc<ast::Decl>> localvars);
 
   std::vector<Param> _params;
 
   Rc<Type> _ret;
 
   Ptr<Block> _block;
+  std::vector<Rc<ast::Decl>> _localvars;
 
   static bool classof(Decl const* decl) {
     return decl->get_kind() == DeclKind::Fn;
   }
 };
 
-// class VarDecl : public Stmt,
-//                 public ValueDecl,
-//                 public AllowAlloc<Context, VarDecl> {
-//  public:
-//  private:
-//   friend AllowAlloc;
-//   VarDecl(std::string_view name, Type* type)
-//       : Stmt(StmtKind::SK_VarDecl), ValueDecl(DeclKind::Var, name, type) {}
-//
-//  public:
-//   static bool classof(Stmt const* expr) {
-//     return expr->get_kind() == SK_VarDecl;
-//   }
-//
-//   static bool classof(Decl const* decl) {
-//     return decl->get_kind() == DeclKind::Var;
-//   }
-//
-//   //===
-//   // compiler data
-//   //===
-//
-//   llvm::AllocaInst* _alloca{};
-// };
-//
+class VarDecl : public Stmt, public ValueDecl {
+ public:
+  VarDecl(std::string_view name, Rc<Type> type)
+      : Stmt(StmtKind::SK_VarDecl),
+        ValueDecl(DeclKind::Var, name, std::move(type)) {}
+
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Var;
+  }
+
+  //===
+  // compiler data
+  //===
+
+  llvm::AllocaInst* _alloca{};
+};
+
 // class ConstDecl : public ValueDecl, public AllowAlloc<Context, ConstDecl> {
 //  public:
 //   int32_t _value;

@@ -55,17 +55,21 @@ struct Data {
         _ast->_types.push_back(astdecl);
         return decl = std::move(astdecl);
       }
-      case pt::Node::Kind::StructDecl:
-      case pt::Node::Kind::EnumDecl:
-      case pt::Node::Kind::TypeDecl:
+      case pt::Node::Kind::VarDecl:
+        return decl = lower_var(llvm::cast<pt::VarDecl>(node));
       default:
-        xerr("unimplemented lowering for: {}", fmt::underlying(node.kind()));
+        xerr("unable to lower decl {}", fmt::underlying(node.kind()));
     }
+  }
+
+  Ptr<ast::VarDecl> lower_var(pt::VarDecl& node) {
+    return std::make_unique<ast::VarDecl>(node.name(*_pt),
+                                          get_type(node._type));
   }
 
   Rc<ast::LiteralTy> lower_primitive(pt::Primitive& node) {
     return _ast->_int32Ty = std::make_unique<ast::LiteralTy>(
-               ast::LiteralTy::Kind::I32, node.name(_pt->name_resolver()));
+               ast::LiteralTy::Kind::I32, node.name(*_pt));
   }
 
   Ptr<ast::FnDecl> lower_fn(pt::FnDecl& node,
@@ -105,15 +109,15 @@ struct Data {
 
     Ptr<ast::Block> body = lower_block(node._body);
 
-    return std::make_unique<ast::FnDecl>(node.name(_pt->name_resolver()),
-                                         std::move(params), rettype,
-                                         std::move(body));
+    return std::make_unique<ast::FnDecl>(node.name(*_pt), std::move(params),
+                                         rettype, std::move(body),
+                                         std::move(body->_localvars));
   }
 
   Rc<ast::Type> get_type(pt::NodeId nodeid) {
     pt::Node& node = _pt->get_node(nodeid);
     assert(node.kind() == pt::Node::Kind::DeclUse);
-    Rc<ast::Decl> decl = get_decluse(llvm::cast<pt::DeclUse>(node));
+    Rc<ast::Decl> decl = deref_decluse(llvm::cast<pt::DeclUse>(node));
     if (!decl->is_type()) {
       xerr("expected type, got {}", fmt::underlying(decl->get_kind()));
     }
@@ -121,13 +125,12 @@ struct Data {
     return std::static_pointer_cast<ast::Type>(decl);
   }
 
-  Rc<ast::Decl> get_decluse(pt::DeclUse& node) {
-    auto const& name = _pt->name_resolver().get_name(node._def.value());
-    if (auto itr = _decls.find(name.definition()); itr != _decls.end()) {
+  Rc<ast::Decl> deref_decluse(pt::DeclUse& node) {
+    if (auto itr = _decls.find(node.definition()); itr != _decls.end()) {
       return itr->second;
     }
 
-    return lower_decl(_pt->get_node(name.definition()));
+    return lower_decl(_pt->get_node(node.definition()));
   }
 
   Ptr<ast::Block> lower_block(pt::NodeId node) {
@@ -143,10 +146,12 @@ struct Data {
     for (pt::NodeId stmtnodeid : node._body) {
       pt::Node& stmtnode = _pt->get_node(stmtnodeid);
 
-      if (stmtnode.is_stmt()) {
-        stmts.push_back(lower_stmt(stmtnode));
-      } else if (stmtnode.is_decl()) {
+      // vardecl is a decl and a stmt. we need to treat it as a decl, so we
+      // check for those first
+      if (stmtnode.is_decl()) {
         localvars.push_back(lower_decl(stmtnode));
+      } else if (stmtnode.is_stmt()) {
+        stmts.push_back(lower_stmt(stmtnode));
       } else {
         xerr("expected stmt, got {}", fmt::underlying(stmtnode.kind()));
       }
@@ -210,6 +215,15 @@ struct Data {
         constexpr int radix = 10;
         return std::make_unique<ast::IntegerLiteral>(
             llvm::APInt(base, intnode._val, radix), _ast->_int32Ty);
+      }
+      case pt::Node::Kind::DeclUse: {
+        auto& use = llvm::cast<pt::DeclUse>(node);
+        Rc<ast::Decl> decl = deref_decluse(use);
+        if (decl->get_kind() != ast::Decl::DeclKind::Var) {
+          xerr("expected var, got {}", fmt::underlying(decl->get_kind()));
+        }
+        auto var = std::static_pointer_cast<ast::VarDecl>(std::move(decl));
+        return std::make_unique<ast::VarRef>(var, var->type());
       }
       default:
         xerr("unable to lower expr: {}", fmt::underlying(node.kind()));

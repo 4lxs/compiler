@@ -6,6 +6,7 @@ namespace x::pt::sema {
 
 Name const &NameResolver::get_name(NameRef ref) const {
   if (ref._scope == NameRef::Scope::Local) {
+    spdlog::info("get_name: {} of {}", ref._id, _names.size());
     return std::get<Name>(_names.at(ref._id));
   }
 
@@ -18,12 +19,12 @@ Name const &NameResolver::get_name(NameRef ref) const {
 }
 
 Name const &NameResolver::define_name(Decl &decl) {
-  OptNameRef res = lookup(decl.name(*this), true);
+  OptNameRef res = lookup(decl.name(*_ctx), true);
 
   if (res.has_value()) {
     Name &name = get_name(res.value());
     if (name._definition.has_value()) {
-      xerr("redefinition of item {}", decl.name(*this));
+      xerr("redefinition of item {}", decl.name(*_ctx));
     }
 
     name._definition = decl.id();
@@ -32,16 +33,15 @@ Name const &NameResolver::define_name(Decl &decl) {
 
   if (_names.empty()) {
     NameRef ref(uint32_t(_globals.size()), NameRef::Scope::Global);
-    decl._resolvedName = ref;
+    // decl._resolvedName = ref;
 
-    auto [itr, _] =
-        _globals.insert(Name(ref, std::move(decl._name), decl.id()));
+    auto [itr, _] = _globals.insert(Name(ref, decl._name, decl.id()));
     return *itr;
   }
-  NameRef ref(uint32_t(_globals.size()), NameRef::Scope::Local);
-  decl._resolvedName = ref;
+  NameRef ref(uint32_t(_names.size()), NameRef::Scope::Local);
+  // decl._resolvedName = ref;
 
-  _names.emplace_back(Name(ref, std::move(decl._name), decl.id()));
+  _names.emplace_back(Name(ref, decl._name, decl.id()));
   return std::get<Name>(_names.back());
 }
 
@@ -51,8 +51,8 @@ Name const &NameResolver::use_name(std::string name) {
     return get_name(res.value());
   }
 
-  NameRef ref(uint32_t(_names.size()), NameRef::Scope::Global);
-  auto [itr, _] = _globals.insert(Name(ref, std::move(name), std::nullopt));
+  NameRef ref(uint32_t(_globals.size()), NameRef::Scope::Global);
+  auto [itr, _] = _globals.insert(Name(ref, name, std::nullopt));
 
   return *itr;
 }

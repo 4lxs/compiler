@@ -83,7 +83,7 @@ class LookupResult {
 
 class Name {
  public:
-  [[nodiscard]] std::string const &str() const { return _name; }
+  [[nodiscard]] std::string_view str() const { return _name; }
 
   [[nodiscard]] pt::NodeId definition() const {
     if (!_definition.has_value()) {
@@ -101,16 +101,16 @@ class Name {
 
  private:
   friend class NameResolver;
-  Name(NameRef ref, std::string &&name, std::optional<pt::NodeId> node,
+  Name(NameRef ref, std::string_view name, std::optional<pt::NodeId> node,
        OptNameRef parent = OptNameRef())
-      : _parent(parent), _name(std::move(name)), _definition(node), _ref(ref) {}
+      : _parent(parent), _name(name), _definition(node), _ref(ref) {}
 
   /// the namespace that this item belongs to. e.g. for method Struct::m(),
   /// this field would be pointer to name of Struct
   OptNameRef _parent;
 
-  /// the name of the item
-  std::string _name;
+  /// the name of the item. owned by pt
+  std::string_view _name;
 
   std::optional<pt::NodeId> _definition;
 
@@ -148,9 +148,13 @@ class NameResolver {
 
   Name const &use_name(std::string name);
 
-  void enter_scope() { _names.emplace_back(Scope()); }
+  void enter_scope() {
+    spdlog::info("enter scope");
+    _names.emplace_back(Scope());
+  }
 
   void exit_scope() {
+    spdlog::info("exit scope");
     auto itr = std::find_if(_names.rbegin(), _names.rend(), [](auto const &e) {
       return std::holds_alternative<Scope>(e);
     });

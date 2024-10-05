@@ -10,6 +10,12 @@ void Return::dump(Context &ctx, uint8_t indent) {
   }
 }
 
+void Return::nameres(sema::NameResolver &res) {
+  if (_retVal.has_value()) {
+    res._ctx->get_node(*_retVal).nameres(res);
+  }
+}
+
 void Assign::dump(Context &ctx, uint8_t indent) {
   fmt::print("{:{}}Assign\n", "", indent);
   fmt::print("{:{}}lhs: \n", "", indent + 1);

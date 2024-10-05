@@ -14,7 +14,7 @@ namespace x::pt {
 
 class Decl : public Node {
  public:
-  [[nodiscard]] std::string const &name(sema::NameResolver const &res) const;
+  [[nodiscard]] std::string const &name(Context const &ctx) const;
 
  protected:
   explicit Decl(Node::Kind kind, std::string &&name)
@@ -27,7 +27,7 @@ class Decl : public Node {
   std::string _name;
 
   /// gets set by the sema upon name resolution pass
-  sema::OptNameRef _resolvedName;
+  OptNodeId _resolvedName;
 
  public:
   static bool classof(Node const *node) { return node->is_decl(); }

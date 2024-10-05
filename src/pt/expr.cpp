@@ -10,9 +10,12 @@ void Integer::dump(Context& ctx, uint8_t indent) {
   fmt::print("{:{}}Integer: {}\n", "", indent, _val);
 }
 
+void Integer::nameres(sema::NameResolver& res) {}
+
 void DeclUse::nameres(sema::NameResolver& res) {
   assert(_var._components.size() == 1);
-  _def = res.use_name(std::move(_var._components.front())).ref();
+  spdlog::info("nameres: {}", format_as(_var));
+  _def = res.use_name(std::move(_var._components.front())).definition();
 }
 
 void DeclUse::dump(Context& ctx, uint8_t indent) {
@@ -21,9 +24,7 @@ void DeclUse::dump(Context& ctx, uint8_t indent) {
     return;
   }
 
-  sema::Name const& ref = ctx.name_resolver().get_name(_def.value());
-
-  Node& node = ctx.get_node(ref.definition());
+  Node& node = ctx.get_node(_def.value());
   node.dump(ctx, indent + 2);
 }
 

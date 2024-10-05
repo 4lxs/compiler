@@ -12,6 +12,8 @@ class Return : public Node {
 
   void dump(Context& ctx, uint8_t indent) override;
 
+  void nameres(sema::NameResolver& res) override;
+
  private:
   friend Context;
   /// @param val: return val;
@@ -20,7 +22,7 @@ class Return : public Node {
       : Node(Node::Kind::Return), _retVal(val) {}
 
  public:
-  static bool classof(Node const *node) {
+  static bool classof(Node const* node) {
     return node->kind() == Node::Kind::Return;
   }
 };
@@ -38,7 +40,7 @@ class Assign : public Node {
       : Node(Node::Kind::Assign), _assignee(assignee), _value(value) {}
 
  public:
-  static bool classof(Node const *node) {
+  static bool classof(Node const* node) {
     return node->kind() == Node::Kind::Assign;
   }
 };
@@ -56,7 +58,7 @@ class While : public Node {
       : Node(Node::Kind::While), _cond(cond), _body(body) {}
 
  public:
-  static bool classof(Node const *node) {
+  static bool classof(Node const* node) {
     return node->kind() == Node::Kind::While;
   }
 };

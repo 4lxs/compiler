@@ -15,6 +15,8 @@ class Integer : public Node {
 
   void dump(Context &ctx, uint8_t indent = 0) override;
 
+  void nameres(sema::NameResolver &res) override;
+
  private:
   friend Context;
   explicit Integer(std::string val)
@@ -91,16 +93,24 @@ class DeclUse : public Node {
  public:
   Path _var;
 
-  sema::OptNameRef _def;
-
   void nameres(sema::NameResolver &res) override;
 
   void dump(Context &ctx, uint8_t indent) override;
+
+  NodeId definition() {
+    if (!_def.has_value()) {
+      xerr("undefined decl: {}", format_as(_var));
+    }
+    return _def.value();
+  }
 
  private:
   friend Context;
   explicit DeclUse(Path &&path)
       : Node(Node::Kind::DeclUse), _var(std::move(path)) {}
+
+  OptNodeId _def;
+  // sema::OptNameRef _def;
 
  public:
   static bool classof(Node const *node) {

@@ -15,10 +15,10 @@ void Block::dump(Context& ctx, uint8_t indent) {
 
 void Block::nameres(sema::NameResolver& res) {
   for (auto& stmt : _body) {
-    res._ctx->get_node(stmt);
+    res._ctx->get_node(stmt).nameres(res);
   }
   if (_end) {
-    res._ctx->get_node(*_end);
+    res._ctx->get_node(*_end).nameres(res);
   }
 }
 

@@ -13,7 +13,7 @@ class Block : public Node {
 
   void dump(Context& ctx, uint8_t indent) override;
 
-  void nameres(sema::NameResolver& /*res*/) override;
+  void nameres(sema::NameResolver& res) override;
 
   /// the expression returned from the block
   void setTerminator(NodeId expr) { _end = expr; }

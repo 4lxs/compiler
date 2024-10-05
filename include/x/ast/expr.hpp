@@ -194,22 +194,19 @@ class Block : public Expr {
 //     return expr->get_kind() == SK_Builtin;
 //   }
 // };
-//
-// class VarRef : public Expr, public AllowAlloc<Context, VarRef> {
-//  public:
-//   VarDecl* _decl;
-//
-//  private:
-//   friend AllowAlloc;
-//   explicit VarRef(VarDecl* decl, Type* type)
-//       : Expr(SK_VarRef, type), _decl(decl) {}
-//
-//  public:
-//   static bool classof(Stmt const* expr) {
-//     return expr->get_kind() == SK_VarRef;
-//   }
-// };
-//
+
+class VarRef : public Expr {
+ public:
+  Rc<VarDecl> _decl;
+
+  explicit VarRef(Rc<VarDecl> decl, Rc<Type> type)
+      : Expr(SK_VarRef, std::move(type)), _decl(std::move(decl)) {}
+
+  static bool classof(Stmt const* expr) {
+    return expr->get_kind() == SK_VarRef;
+  }
+};
+
 // class FieldAccess : public Expr, public AllowAlloc<Context, FieldAccess> {
 //  public:
 //   not_null<Expr*> _base;

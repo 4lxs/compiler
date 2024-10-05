@@ -30,7 +30,10 @@ class Context {
 
   void add_item(NodeId item) { _items.push_back(item); }
 
-  Node &get_node(NodeId nid) { return *_nodes.at(nid._id); }
+  [[nodiscard]] Node &get_node(NodeId nid) { return *_nodes.at(nid._id); }
+  [[nodiscard]] Node const &get_node(NodeId nid) const {
+    return *_nodes.at(nid._id);
+  }
 
   void resolve_names();
 

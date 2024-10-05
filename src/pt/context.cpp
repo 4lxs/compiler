@@ -2,6 +2,7 @@
 
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <llvm/Support/Casting.h>
 #include <spdlog/spdlog.h>
 
 #include "x/pt/decl.hpp"
@@ -27,6 +28,10 @@ void Context::dump() {
 
 void Context::resolve_names() {
   _res = std::make_unique<sema::NameResolver>(this);
+  for (NodeId node : _items) {
+    spdlog::info("deifining: {}", fmt::underlying(get_node(node).kind()));
+    _res->define_name(llvm::cast<pt::Decl>(get_node(node)));
+  }
   for (NodeId node : _items) {
     get_node(node).nameres(*_res);
   }

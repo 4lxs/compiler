@@ -54,12 +54,20 @@ class Compiler {
       function(*fnctn);
     }
 
-    for (auto const& fnctn : context._functions) {
+    for (Rc<ast::FnDecl> const& fnctn : context._functions) {
       llvm::Function* func = _mod.getFunction(fnctn->name());
+      spdlog::info("compiling function {}", fnctn->name());
       assert(func != nullptr);
       _currentFunction = func;
       llvm::BasicBlock* body = llvm::BasicBlock::Create(_ctx, "entry", func);
       _builder.SetInsertPoint(body);
+
+      for (Rc<ast::Decl> const& vardecl : fnctn->_localvars) {
+        auto& var = llvm::cast<ast::VarDecl>(*vardecl);
+        llvm::AllocaInst* allocaInst =
+            _builder.CreateAlloca(var.type()->_llvmType, nullptr, var.name());
+        var._alloca = allocaInst;
+      }
 
       spdlog::info("body");
       for (Ptr<ast::Stmt> const& stmt : fnctn->_block->_body) {
@@ -156,7 +164,13 @@ class Compiler {
       case ast::Stmt::SK_Int: {
         auto const& intlit = llvm::cast<ast::IntegerLiteral>(expr);
         return Value{llvm::ConstantInt::get(_ctx, intlit._apint)};
-      } break;
+      }
+      case ast::Stmt::SK_VarRef: {
+        auto const& declRef = llvm::cast<ast::VarRef>(expr);
+        llvm::AllocaInst* allocaInst = declRef._decl->_alloca;
+        assert(allocaInst != nullptr);
+        return Value{allocaInst, allocaInst->getAllocatedType()};
+      }
       default:
         xerr("unhandled expr {}", fmt::underlying(expr.get_kind()));
         // case ast::Stmt::SK_Bool:
@@ -257,12 +271,6 @@ class Compiler {
         //                                  get_deref(eval(builtin->_args.at(1))))};
         //   }
         // } break;
-        // case ast::Stmt::SK_VarRef: {
-        //   auto const& declRef = llvm::cast<ast::VarRef>(expr);
-        //   llvm::AllocaInst* allocaInst = declRef->_decl->_alloca;
-        //   assert(allocaInst != nullptr);
-        //   return Value{allocaInst, allocaInst->getAllocatedType()};
-        // }; break;
         // case ast::Stmt::SK_FieldAccess: {
         //   auto const& fieldAccess = llvm::cast<ast::FieldAccess>(expr);
         //   spdlog::info("accessing field {} of struct {}",

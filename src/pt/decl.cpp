@@ -1,26 +1,27 @@
 #include "x/pt/decl.hpp"
 
+#include <llvm/Support/Casting.h>
+
 #include "x/pt/sema/nameresolution.hpp"
 
 namespace x::pt {
 
-std::string const &Decl::name(sema::NameResolver const &res) const {
-  return _resolvedName.has_value() ? res.get_name(_resolvedName.value()).str()
-                                   : _name;
+std::string const &Decl::name(Context const &ctx) const {
+  if (!_resolvedName.has_value()) {
+    return _name;
+  }
+  Node const &node = ctx.get_node(_resolvedName.value());
+  Decl const &useDecl = llvm::cast<Decl>(node);
+  return useDecl.name(ctx);
 }
 
-void Primitive::nameres(sema::NameResolver &res) {
-  spdlog::info("resolving primitive");
-  res.define_name(*this);
-}
+void Primitive::nameres(sema::NameResolver &res) {}
 
 void Primitive::dump(Context &ctx, uint8_t indent) {
-  fmt::print("{:{}}Primitive: {}\n", "", indent, name(ctx.name_resolver()));
+  fmt::print("{:{}}Primitive: {}\n", "", indent, name(ctx));
 }
 
 void FnDecl::nameres(sema::NameResolver &res) {
-  res.define_name(*this);
-
   res.enter_scope();
 
   auto &ctx = *res._ctx;
@@ -36,7 +37,7 @@ void FnDecl::nameres(sema::NameResolver &res) {
 }
 
 void FnDecl::dump(Context &ctx, uint8_t indent) {
-  fmt::print("{:{}}FnDecl: {}\n", "", indent, name(ctx.name_resolver()));
+  fmt::print("{:{}}FnDecl: {}\n", "", indent, name(ctx));
   fmt::print("{:{}}ret:\n", "", indent + 1);
   ctx.get_node(_retTy).dump(ctx, indent + 2);
   fmt::print("{:{}}body:\n", "", indent + 1);
@@ -44,6 +45,8 @@ void FnDecl::dump(Context &ctx, uint8_t indent) {
 }
 
 void VarDecl::nameres(sema::NameResolver &res) {
+  res.define_name(*this);
+
   res._ctx->get_node(_type).nameres(res);
 
   if (_val.has_value()) {
@@ -52,7 +55,7 @@ void VarDecl::nameres(sema::NameResolver &res) {
 }
 
 void VarDecl::dump(Context &ctx, uint8_t indent) {
-  fmt::print("{:{}}VarDecl: {}\n", "", indent, name(ctx.name_resolver()));
+  fmt::print("{:{}}VarDecl: {}\n", "", indent, name(ctx));
   fmt::print("{:{}}type:\n", "", indent + 1);
   ctx.get_node(_type).dump(ctx, indent + 2);
   if (_val.has_value()) {

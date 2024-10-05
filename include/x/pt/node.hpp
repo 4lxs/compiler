@@ -18,8 +18,6 @@ class Node {
   virtual ~Node() = default;
 
   enum class Kind {
-    Primitive,
-
     Invalid,
     StmtBegin,  // <--- stmt
     ExprBegin,  // <--- expr
@@ -45,6 +43,7 @@ class Node {
     StmtEnd,  // <--- /stmt
 
     ParamDecl,
+    Primitive,
 
     TopLevelDeclBegin,  // <--- top level
     FnDecl,
