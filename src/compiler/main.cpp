@@ -25,10 +25,9 @@
 #include "antlr/visitor.hpp"
 #include "compiler/compiler.hpp"
 #include "handroll.hpp"
+#include "lower-pt.hpp"
 #include "x/ast/context.hpp"
-#include "x/ast/type.hpp"
 #include "x/pt/context.hpp"
-#include "x/sema/sema.hpp"
 
 using namespace parser;
 using namespace x;
@@ -132,9 +131,11 @@ void compile(std::string_view filename) {
   //   llvm::outs() << "\n";
   // }
 
-  sema::Sema anal(parsetree.get());
+  parsetree->resolve_names();
 
-  Ptr<ast::Context> ast = anal.finish();
+  parsetree->dump();
+
+  Ptr<ast::Context> ast = lower_pt(std::move(parsetree));
 
   Compiler compiler;
 

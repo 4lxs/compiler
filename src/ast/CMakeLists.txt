@@ -2,7 +2,12 @@ include(GenerateExportHeader)
 
 set(NAME ast)
 
-add_library(${NAME} stmt.cpp type.cpp context.cpp)
+add_library(
+  ${NAME}
+  stmt.cpp
+  type.cpp
+  context.cpp
+  decl.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 

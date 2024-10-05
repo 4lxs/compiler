@@ -1,30 +1,36 @@
 #pragma once
 
-#include <optional>
-#include <vector>
-
+#include "context.hpp"
 #include "fwd_decl.hpp"
-#include "x/common.hpp"
+#include "node.hpp"
 #include "x/sema/fwd_decl.hpp"
 
 namespace x::pt {
 
-class Block : public AllowAlloc<Context, Block> {
+class Block : public Node {
  public:
-  void add(auto stmt) { _body.emplace_back(stmt); }
-  void add(Expr &&expr);
+  void add(NodeId stmt) { _body.emplace_back(stmt); }
+
+  void dump(Context& ctx, uint8_t indent) override;
+
+  void nameres(sema::NameResolver& /*res*/) override;
 
   /// the expression returned from the block
-  void setTerminator(Expr expr);
+  void setTerminator(NodeId expr) { _end = expr; }
 
- protected:
-  friend sema::Sema;
-  std::vector<Stmt> _body;
-  std::optional<Expr> _end;
+  std::vector<NodeId> _body;
+  std::optional<NodeId> _end;
 
  private:
-  friend AllowAlloc;
-  Block() = default;
+  friend Context;
+  Block() : Node(Node::Kind::Block) {}
+
+ public:
+  ~Block() override = default;
+
+  static bool classof(Node const* node) {
+    return node->kind() == Node::Kind::Block;
+  }
 };
 
 }  // namespace x::pt

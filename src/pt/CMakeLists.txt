@@ -9,7 +9,10 @@ add_library(
   expr.cpp
   module.cpp
   stmt.cpp
-  path.cpp)
+  path.cpp
+  decl.cpp
+  node.cpp
+  sema/nameresolution.cpp)
 
 add_library(myproject::${NAME} ALIAS ${NAME})
 

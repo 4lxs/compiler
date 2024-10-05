@@ -1,96 +1,147 @@
 #pragma once
 
+#include <gsl/assert>
 #include <utility>
 #include <vector>
 
 #include "fwd_decl.hpp"
-#include "x/common.hpp"
+#include "x/pt/context.hpp"
+#include "x/pt/node.hpp"
+#include "x/pt/sema/nameresolution.hpp"
 #include "x/sema/fwd_decl.hpp"
 
 namespace x::pt {
 
-struct FnParam {
-  std::string name;
-  DeclRef *type;
-};
-
-class FnDecl : private AllowAlloc<Context, FnDecl> {
+class Decl : public Node {
  public:
-  [[nodiscard]] std::string const &name() const { return _name; };
-
-  std::vector<FnParam> _params;
-
-  DeclRef *_retTy;
-
-  not_null<Block *> _body;
-
-  std::string _name;
-  std::string _mangledName;
-
-  using AllowAlloc::Create;
+  [[nodiscard]] std::string const &name(sema::NameResolver const &res) const;
 
  protected:
-  friend AllowAlloc;
-  FnDecl(std::string name, std::vector<FnParam> &&params, DeclRef *retTy,
-         not_null<Block *> body)
-      : _params(std::move(params)),
-        _retTy(retTy),
-        _body(body),
-        _name(std::move(name)) {}
+  explicit Decl(Node::Kind kind, std::string &&name)
+      : Node(kind), _name(name) {}
+
+ private:
+  friend sema::NameResolver;
+  /// the name of this decl. always use name() to access this field as it will
+  /// get moved into _resolvedName
+  std::string _name;
+
+  /// gets set by the sema upon name resolution pass
+  sema::OptNameRef _resolvedName;
+
+ public:
+  static bool classof(Node const *node) { return node->is_decl(); }
 };
 
-class MethodDecl : public FnDecl, private AllowAlloc<Context, MethodDecl> {
+class Primitive : public Decl {
+ public:
+  void nameres(sema::NameResolver &res) override;
+  void dump(Context &ctx, uint8_t indent) override;
+
+  enum class Type {
+    Int32,
+  } _type;
+
+ private:
+  friend Context;
+  Primitive(std::string &&name, Type type)
+      : Decl(Node::Kind::Primitive, std::move(name)), _type(type) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::Primitive;
+  }
+};
+
+class ParamDecl : public Decl {
+  friend Context;
+  ParamDecl(std::string name, NodeId type)
+      : Decl(Node::Kind::ParamDecl, std::move(name)), type(type) {}
+
+ public:
+  std::string name;
+  NodeId type;
+};
+
+class FnDecl : public Decl {
+ public:
+  void nameres(sema::NameResolver &res) override;
+
+  void dump(Context &ctx, uint8_t indent) override;
+
+  std::vector<NodeId> _params;
+
+  NodeId _retTy;
+
+  NodeId _body;
+
+  std::string _mangledName;
+
+ protected:
+  friend Context;
+  FnDecl(std::string name, std::vector<NodeId> &&params, NodeId retTy,
+         NodeId body, bool isMethod = false)
+      : Decl(isMethod ? Node::Kind::MethodDecl : Node::Kind::FnDecl,
+             std::move(name)),
+        _params(std::move(params)),
+        _retTy(retTy),
+        _body(body) {}
+};
+
+class MethodDecl : public FnDecl {
  public:
   /// the type of the receiver
   /// in Foo::bar(), Foo is the receiver
-  DeclRef *_recv;
+  NodeId _recv;
 
   /// if it's not static, it has a self
   bool _isStatic;
 
-  using AllowAlloc<Context, MethodDecl>::Create;
-
  private:
-  friend AllowAlloc<Context, MethodDecl>;
-  MethodDecl(DeclRef *recv, std::string name, std::vector<FnParam> &&params,
-             DeclRef *retTy, not_null<Block *> body, bool isStatic)
-      : FnDecl(std::move(name), std::move(params), retTy, body),
+  friend Context;
+  MethodDecl(NodeId recv, std::string name, std::vector<NodeId> &&params,
+             NodeId retTy, NodeId body, bool isStatic)
+      : FnDecl(std::move(name), std::move(params), retTy, body, true),
         _recv(recv),
         _isStatic(isStatic) {}
 };
 
-class VarDecl : public AllowAlloc<Context, VarDecl> {
-  friend AllowAlloc;
-
+class VarDecl : public Decl {
  public:
-  std::string _name;
-  not_null<DeclRef *> _type;
-  std::optional<Expr> _val;
+  NodeId _type;
+  std::optional<NodeId> _val;
 
  private:
-  VarDecl(std::string &&name, not_null<DeclRef *> type,
-          std::optional<Expr> const &val)
-      : _name(std::move(name)), _type(type), _val(val) {};
+  friend Context;
+  VarDecl(std::string &&name, NodeId type, std::optional<NodeId> val)
+      : Decl(Node::Kind::VarDecl, std::move(name)), _type(type), _val(val) {};
+
+  void nameres(sema::NameResolver &res) override;
+  void dump(Context &ctx, uint8_t indent) override;
 };
 
-class StructDecl : public AllowAlloc<Context, StructDecl> {
+class StructDecl : public Node {
  public:
   struct Field {
     std::string name;
-    not_null<DeclRef *> type;
-    std::optional<Expr> defaultVal;
+    NodeId type;
+
+    /// must be expr
+    std::optional<NodeId> defaultVal;
   };
 
   std::string _name;
   std::vector<Field> _fields;
 
  private:
-  friend AllowAlloc;
+  friend Context;
   explicit StructDecl(std::string name, std::vector<Field> &&fields)
-      : _name(std::move(name)), _fields(std::move(fields)) {}
+      : Node(Node::Kind::StructDecl),
+        _name(std::move(name)),
+        _fields(std::move(fields)) {}
 };
 
-class EnumDecl : public AllowAlloc<Context, EnumDecl> {
+class EnumDecl : public Node {
  public:
   struct Variant {
     std::string name;
@@ -99,20 +150,22 @@ class EnumDecl : public AllowAlloc<Context, EnumDecl> {
   std::vector<Variant> _variants;
 
  private:
-  friend AllowAlloc;
+  friend Context;
   explicit EnumDecl(std::string name, std::vector<Variant> &&variants)
-      : _name(std::move(name)), _variants(std::move(variants)) {}
+      : Node(Node::Kind::EnumDecl),
+        _name(std::move(name)),
+        _variants(std::move(variants)) {}
 };
 
-class TypeDecl : public AllowAlloc<Context, TypeDecl> {
+class TypeDecl : public Node {
  public:
   std::string _name;
-  not_null<DeclRef *> _type;
+  NodeId _type;
 
  private:
-  friend AllowAlloc;
-  TypeDecl(std::string name, not_null<DeclRef *> type)
-      : _name(std::move(name)), _type(type) {}
+  friend Context;
+  TypeDecl(std::string name, NodeId type)
+      : Node(Node::Kind::TypeDecl), _name(std::move(name)), _type(type) {}
 };
 
 }  // namespace x::pt

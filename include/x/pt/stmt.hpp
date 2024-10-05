@@ -1,47 +1,64 @@
 #pragma once
 
-#include <optional>
-
 #include "fwd_decl.hpp"
-#include "x/common.hpp"
 #include "x/pt/context.hpp"
+#include "x/pt/node.hpp"
 
 namespace x::pt {
 
-class Return : public AllowAlloc<Context, Return> {
-  friend AllowAlloc;
-
+class Return : public Node {
  public:
-  std::optional<Expr> _retVal;
+  std::optional<NodeId> _retVal;
+
+  void dump(Context& ctx, uint8_t indent) override;
 
  private:
+  friend Context;
   /// @param val: return val;
   ///   nullptr -> return;
-  explicit Return(std::optional<Expr> val) : _retVal(val) {}
-};
-
-class Assign : public AllowAlloc<Context, Assign> {
-  friend AllowAlloc;
+  explicit Return(std::optional<NodeId> val)
+      : Node(Node::Kind::Return), _retVal(val) {}
 
  public:
-  Expr _assignee;
-  Expr _value;
-
- private:
-  explicit Assign(Expr assignee, Expr value)
-      : _assignee(assignee), _value(value) {}
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::Return;
+  }
 };
 
-class While : public AllowAlloc<Context, While> {
-  friend AllowAlloc;
-
+class Assign : public Node {
  public:
-  Expr _cond;
-  not_null<Block*> _body;
+  NodeId _assignee;
+  NodeId _value;
+
+  void dump(Context& ctx, uint8_t indent) override;
 
  private:
-  explicit While(Expr cond, not_null<Block*> body)
-      : _cond(cond), _body(body) {}
+  friend Context;
+  explicit Assign(NodeId assignee, NodeId value)
+      : Node(Node::Kind::Assign), _assignee(assignee), _value(value) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::Assign;
+  }
+};
+
+class While : public Node {
+ public:
+  NodeId _cond;
+  NodeId _body;
+
+  void dump(Context& ctx, uint8_t indent) override;
+
+ private:
+  friend Context;
+  explicit While(NodeId cond, NodeId body)
+      : Node(Node::Kind::While), _cond(cond), _body(body) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::While;
+  }
 };
 
 }  // namespace x::pt

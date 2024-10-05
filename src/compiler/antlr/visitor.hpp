@@ -10,7 +10,6 @@
 
 #include "x/pt/context.hpp"
 #include "x/pt/decl.hpp"
-#include "x/pt/stmt.hpp"
 
 namespace x {
 
@@ -19,7 +18,7 @@ class Visitor : public parser::XBaseVisitor {
   explicit Visitor(pt::Context *ctx);
 
  protected:
-  std::any visitModdef(parser::XParser::ModdefContext *ctx) override;
+  // std::any visitModdef(parser::XParser::ModdefContext *ctx) override;
 
   std::any visitFunction(parser::XParser::FunctionContext *ctx) override;
 
@@ -55,8 +54,7 @@ class Visitor : public parser::XBaseVisitor {
 
   std::any visitTypeDef(parser::XParser::TypeDefContext *ctx) override;
 
-  std::any visitMemberAccess(
-      parser::XParser::MemberAccessContext *ctx) override;
+  std::any visitMemberE(parser::XParser::MemberEContext *ctx) override;
 
  private:
   [[nodiscard]]
@@ -67,11 +65,6 @@ class Visitor : public parser::XBaseVisitor {
 
   pt::Context *_ctx;
 
-  // set in visitModdef. should never be null
- public:
-  pt::Module *_module{nullptr};
-
- private:
   /// this is non-null while we're in a block.
   /// it has the value of the inner-most block
   pt::Block *_block{};
@@ -79,6 +72,8 @@ class Visitor : public parser::XBaseVisitor {
   template <typename T>
   class Stack {
    public:
+    explicit Stack(pt::Context *ctx) : _ctx(ctx) {}
+
     /// Expr is a variant. emplacing allows you to do push(A) instead of
     /// push(Expr(a))
     constexpr void push(auto expr) { _stack.emplace_back(expr); };
@@ -91,13 +86,19 @@ class Visitor : public parser::XBaseVisitor {
       return ret;
     }
 
+    template <typename TNode>
+      requires(std::is_base_of_v<pt::Node, TNode>)
+    TNode &pop_as() {
+      return llvm::cast<TNode>(_ctx->get_node(pop()));
+    }
+
     std::vector<T> pop(size_t cnt) {
       assert(_stack.size() >= cnt);
 
       auto start = _stack.end() - ssize_t(cnt);
       auto end = _stack.end();
-      std::vector<pt::Expr> ret(std::move_iterator{start},
-                                std::move_iterator{end});
+      std::vector<pt::NodeId> ret(std::move_iterator{start},
+                                  std::move_iterator{end});
 
       _stack.erase(start, end);
 
@@ -108,11 +109,13 @@ class Visitor : public parser::XBaseVisitor {
 
    private:
     // stack for storing values. std::any doesn't allow non-copyable types
-    std::vector<pt::Expr> _stack;
+    std::vector<pt::NodeId> _stack;
     // std::vector<pt::Type> _stack;
+
+    pt::Context *_ctx;
   };
 
-  Stack<pt::Expr> _stack;
+  Stack<pt::NodeId> _stack{_ctx};
 };
 
 }  // namespace x

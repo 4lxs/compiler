@@ -1,7 +1,5 @@
 #pragma once
 
-#include <variant>
-
 namespace x::pt {
 
 class Context;
@@ -9,32 +7,34 @@ class Module;
 
 struct Path;
 
-class StructExpr;
-class IntegerE;
+class Node;
+class NodeId;
+class OptNodeId;
+class Decl;
+
+class Integer;
 class IfExpr;
 class BinaryExpr;
 class ParenExpr;
 class StructExpr;
 class Call;
+class BoolE;
+class StringE;
 class Block;
-class DeclRef;
+class DeclUse;
 class FieldAccess;
-using Expr = std::variant<IntegerE*, IfExpr*, BinaryExpr*, ParenExpr*,
-                          StructExpr*, Call*, Block*, DeclRef*, FieldAccess*>;
 
-struct FnParam;
+class Primitive;
+class ParamDecl;
 class FnDecl;
 class MethodDecl;
 class StructDecl;
 class VarDecl;
 class EnumDecl;
 class TypeDecl;
-using ValueDecl = std::variant<FnDecl*, VarDecl*>;
-using TopLevelDecl = std::variant<FnDecl*, StructDecl*, EnumDecl*, TypeDecl*, MethodDecl*>;
 
 class Return;
 class Assign;
 class While;
-using Stmt = std::variant<Expr, Return*, VarDecl*, Assign*, While*>;
 
 }  // namespace x::pt

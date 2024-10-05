@@ -88,27 +88,17 @@ if_
 // expressions that can appear at the start of member chain
 // primaryExpr.a.b.c()
 primaryExpr
-    : primaryExpr Dot memberAccess #memberE
-    | if_ #ifE
+    : if_ #ifE
     | block #blockE
     // primary values
     | IntegerLiteral #intPE
     | String #strPE
     | (True | False) #boolPE
 
-    | fn=path arg=structExpr #callE
+    | fn=primaryExpr args=structExpr #callE
     | Ident #varE
+    | primaryExpr Dot Ident #memberE
     | structExpr #structE
-    ;
-
-// ().x
-// ().x()
-// if {} else {}.x()
-// ().x.y().z
-// if {} else {}.x()
-
-memberAccess
-    : field=Ident args=structExpr?
     ;
 
 expr

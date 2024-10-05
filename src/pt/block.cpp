@@ -1,19 +1,25 @@
 #include "x/pt/block.hpp"
 
-#include <cassert>
-#include <memory>
-
-#include "x/pt/expr.hpp"
-#include "x/pt/stmt.hpp"
-
 namespace x::pt {
 
-void Block::add(Expr&& expr) { _body.emplace_back(std::move(expr)); }
+void Block::dump(Context& ctx, uint8_t indent) {
+  fmt::print("{:{}}Block:\n", "", indent);
+  for (auto const& stmt : _body) {
+    ctx.get_node(stmt).dump(ctx, indent + 2);
+  }
+  if (_end) {
+    fmt::print("{:{}}return:\n", "", indent);
+    ctx.get_node(*_end).dump(ctx, indent + 1);
+  }
+}
 
-void Block::setTerminator(Expr expr) {
-  assert(!_end.has_value());
-
-  _end = std::move(expr);
+void Block::nameres(sema::NameResolver& res) {
+  for (auto& stmt : _body) {
+    res._ctx->get_node(stmt);
+  }
+  if (_end) {
+    res._ctx->get_node(*_end);
+  }
 }
 
 }  // namespace x::pt

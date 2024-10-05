@@ -4,11 +4,10 @@
 #include <vector>
 
 #include "fwd_decl.hpp"
-#include "x/common.hpp"
 
 namespace x::pt {
 
-struct Path : public AllowAlloc<Context, Path> {
+struct Path {
  public:
   /// @param external ::a::b true, a::b false
   /// @param module {"a", "b"} in both cases

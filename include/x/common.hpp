@@ -1,7 +1,12 @@
 #pragma once
 
+#include <fmt/core.h>
+#include <fmt/format.h>
+
 #include <gsl/gsl>
 #include <memory>
+
+#include "spdlog/spdlog.h"
 
 namespace x {
 
@@ -17,7 +22,13 @@ struct overloaded : Ts... {
   using Ts::operator()...;
 };
 
+template <typename Alloc, typename Item>
+concept CanAlloc = requires(Alloc all, Item item) {
+  { all.template allocate<Item>() } -> std::convertible_to<Item*>;
+};
+
 template <typename Allocator, typename Self>
+  requires CanAlloc<Allocator, Self>
 class AllowAlloc {
  public:
   static Self* Allocate(Allocator& allocator) {
@@ -38,5 +49,11 @@ class AllowAlloc {
 };
 
 using gsl::not_null;
+
+template <typename... Args>
+[[noreturn]] inline void xerr(fmt::format_string<Args...> fmt, Args&&... args) {
+  spdlog::error(fmt, std::forward<Args>(args)...);
+  std::terminate();
+}
 
 }  // namespace x

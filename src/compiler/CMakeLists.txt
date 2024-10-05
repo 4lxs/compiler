@@ -4,6 +4,8 @@ add_executable(
   ${NAME}
   main.cpp
   handroll.hpp
+  lower-pt.hpp
+  lower-pt.cpp
   antlr/exceptionErrorListener.hpp
   antlr/visitor.cpp
   antlr/visitor.hpp
@@ -203,7 +205,9 @@ target_link_libraries(
           ${llvm_libs}
           parser
           pt
-          sema)
+          ast
+          # sema
+)
 
 target_include_directories(
   ${NAME} PRIVATE "${CMAKE_BINARY_DIR}/configured_files/include")

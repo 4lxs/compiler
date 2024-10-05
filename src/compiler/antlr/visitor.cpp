@@ -5,44 +5,44 @@
 
 #include "XParser.h"
 #include "spdlog/spdlog.h"
+#include "x/pt/block.hpp"
 #include "x/pt/decl.hpp"
 #include "x/pt/expr.hpp"
-#include "x/pt/module.hpp"
 #include "x/pt/stmt.hpp"
 
 namespace x {
 
 Visitor::Visitor(pt::Context* ctx) : _ctx{ctx} {}
 
-std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
-  std::vector<std::string> modulepath;
-
-  for (auto* ident : ctx->Ident()) {
-    modulepath.emplace_back(ident->toString());
-  }
-
-  bool external = ctx->initSep != nullptr;
-
-  _module = _ctx->module(pt::Path(std::move(modulepath), external));
-
-  return {};
-}
+// std::any Visitor::visitModdef(parser::XParser::ModdefContext* ctx) {
+//   std::vector<std::string> modulepath;
+//
+//   for (auto* ident : ctx->Ident()) {
+//     modulepath.emplace_back(ident->toString());
+//   }
+//
+//   bool external = ctx->initSep != nullptr;
+//
+//   _module = _ctx->module(pt::Path(std::move(modulepath), external));
+//
+//   return {};
+// }
 
 std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
   visitBlock(ctx->block());
-  auto* body = std::get<pt::Block*>(_stack.pop());
+  pt::NodeId body = _stack.pop();
 
-  auto* retType = pt::DeclRef::Create(*_ctx, get_path(ctx->ret));
+  auto& retType = _ctx->create<pt::DeclUse>(get_path(ctx->ret));
 
   auto [params, isStatic] = [&, ctx = ctx->params()]() {
     auto parse_param = [&](parser::XParser::ParamContext* param) {
       auto* name = param->Ident();
       auto* type = param->path();
-      auto* typeref = pt::DeclRef::Create(*_ctx, get_path(type));
-      return pt::FnParam{name->getText(), typeref};
+      auto& typeref = _ctx->create<pt::DeclUse>(get_path(type));
+      return _ctx->create<pt::ParamDecl>(name->getText(), typeref.id()).id();
     };
 
-    std::vector<pt::FnParam> params;
+    std::vector<pt::NodeId> params;
     std::vector<parser::XParser::ParamContext*> ctxParams = ctx->param();
     params.reserve(ctxParams.size());
     for (auto* param : ctxParams) {
@@ -59,22 +59,22 @@ std::any Visitor::visitFunction(parser::XParser::FunctionContext* ctx) {
   }();
 
   if (ctx->class_ != nullptr) {
-    pt::DeclRef* recv = pt::DeclRef::Create(*_ctx, get_path(ctx->class_));
-    auto* method =
-        pt::MethodDecl::Create(*_ctx, recv, ctx->name->getText(),
-                               std::move(params), retType, body, isStatic);
+    pt::NodeId recv = _ctx->create<pt::DeclUse>(get_path(ctx->class_)).id();
+    auto& method = _ctx->create<pt::MethodDecl>(recv, ctx->name->getText(),
+                                                std::move(params), retType.id(),
+                                                body, isStatic);
 
-    _module->define(method);
+    _ctx->add_item(method.id());
 
     return {};
   }
 
   assert(isStatic);
 
-  auto* func = pt::FnDecl::Create(*_ctx, ctx->name->getText(),
-                                  std::move(params), retType, body);
+  auto& func = _ctx->create<pt::FnDecl>(ctx->name->getText(), std::move(params),
+                                        retType.id(), body);
 
-  _module->define(func);
+  _ctx->add_item(func.id());
 
   return {};
 }
@@ -83,13 +83,13 @@ std::any Visitor::visitReturn(parser::XParser::ReturnContext* ctx) {
   assert(_block != nullptr);
 
   auto* retVal = ctx->expr();
-  if (retVal == nullptr) {
-    _block->add(pt::Return::Create(*_ctx, std::nullopt));
-  } else {
+  std::optional<pt::NodeId> ret;
+  if (retVal != nullptr) {
     visit(retVal);
-
-    _block->add(pt::Return::Create(*_ctx, _stack.pop()));
+    ret = _stack.pop();
   }
+
+  _block->add(_ctx->create<pt::Return>(ret).id());
 
   return {};
 }
@@ -97,18 +97,19 @@ std::any Visitor::visitReturn(parser::XParser::ReturnContext* ctx) {
 std::any Visitor::visitCallE(parser::XParser::CallEContext* ctx) {
   assert(_block != nullptr);
 
-  auto* fnVar = pt::DeclRef::Create(*_ctx, get_path(ctx->fn));
+  visit(ctx->fn);
+  pt::NodeId fnVar = _stack.pop();
 
   visitStructExpr(ctx->structExpr());
-  auto* args = std::get<pt::StructExpr*>(_stack.pop());
+  pt::NodeId args = _stack.pop();
 
-  _stack.push(pt::Call::Create(*_ctx, fnVar, args));
+  _stack.push(_ctx->create<pt::Call>(fnVar, args).id());
 
   return {};
 }
 
 std::any Visitor::visitIntPE(parser::XParser::IntPEContext* ctx) {
-  _stack.push(pt::IntegerE::Create(*_ctx, ctx->getText()));
+  _stack.push(_ctx->create<pt::Integer>(ctx->getText()).id());
 
   return {};
 }
@@ -117,7 +118,7 @@ std::any Visitor::visitBinaryE(parser::XParser::BinaryEContext* ctx) {
   visitChildren(ctx);
   auto exprs = _stack.pop(2);
 
-  using Op = pt::BinaryExpr::Operator;
+  using Op = pt::BinaryNode::Operator;
   using Tok = parser::XParser;
   Op opr{};
 
@@ -145,7 +146,7 @@ std::any Visitor::visitBinaryE(parser::XParser::BinaryEContext* ctx) {
       std::terminate();
   }
 
-  _stack.push(pt::BinaryExpr::Create(*_ctx, exprs[0], exprs[1], opr));
+  _stack.push(_ctx->create<pt::BinaryNode>(exprs[0], exprs[1], opr).id());
 
   return {};
 }
@@ -154,7 +155,7 @@ std::any Visitor::visitStructExpr(parser::XParser::StructExprContext* ctx) {
   auto ctxFields = ctx->structExprField();
 
   visitChildren(ctx);
-  std::vector<pt::Expr> vals = _stack.pop(ctxFields.size());
+  std::vector<pt::NodeId> vals = _stack.pop(ctxFields.size());
   std::vector<pt::Field> fields;
   fields.reserve(vals.size());
 
@@ -164,7 +165,7 @@ std::any Visitor::visitStructExpr(parser::XParser::StructExprContext* ctx) {
     fields.emplace_back(std::move(name), expr);
   }
 
-  _stack.push(pt::StructExpr::Create(*_ctx, std::move(fields)));
+  _stack.push(_ctx->create<pt::StructExpr>(std::move(fields)).id());
 
   return {};
 }
@@ -184,21 +185,21 @@ std::any Visitor::visitStmt(parser::XParser::StmtContext* ctx) {
 std::any Visitor::visitIf_(parser::XParser::If_Context* ctx) {
   visit(ctx->expr());
 
-  pt::Expr cond = _stack.pop();
+  pt::NodeId cond = _stack.pop();
 
   visitBlock(ctx->then);
 
-  not_null<pt::Block*> then = std::get<pt::Block*>(_stack.pop());
+  pt::NodeId then = _stack.pop();
 
-  pt::Block* else_{};
+  std::optional<pt::NodeId> else_;
 
-  if (ctx->else_ != nullptr) {
+  if (ctx->else_) {
     visitBlock(ctx->else_);
 
-    else_ = std::get<pt::Block*>(_stack.pop());
+    else_ = _stack.pop();
   }
 
-  _stack.push(pt::IfExpr::Create(*_ctx, cond, then, else_));
+  _stack.push(_ctx->create<pt::IfExpr>(cond, then, else_).id());
 
   return {};
 }
@@ -206,7 +207,7 @@ std::any Visitor::visitIf_(parser::XParser::If_Context* ctx) {
 std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
   pt::Block* oldblock = _block;
 
-  _block = pt::Block::Create(*_ctx);
+  _block = &_ctx->create<pt::Block>();
 
   visitChildren(ctx);
 
@@ -214,7 +215,7 @@ std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
     _block->setTerminator(_stack.pop());
   }
 
-  _stack.push(_block);
+  _stack.push(_block->id());
 
   _block = oldblock;
 
@@ -224,34 +225,35 @@ std::any Visitor::visitBlock(parser::XParser::BlockContext* ctx) {
 std::any Visitor::visitVarDef(parser::XParser::VarDefContext* ctx) {
   std::string name = ctx->name->getText();
 
-  std::optional<pt::Expr> val;
+  std::optional<pt::NodeId> val;
 
   if (ctx->val != nullptr) {
     visit(ctx->val);
     val = _stack.pop();
   }
 
-  auto* type = pt::DeclRef::Create(*_ctx, get_path(ctx->typ));
+  pt::NodeId type = _ctx->create<pt::DeclUse>(get_path(ctx->typ)).id();
 
-  _block->add(pt::VarDecl::Create(*_ctx, std::move(name), type, val));
+  _block->add(_ctx->create<pt::VarDecl>(std::move(name), type, val).id());
 
   return {};
 }
 
 std::any Visitor::visitVarAssign(parser::XParser::VarAssignContext* ctx) {
   visit(ctx->primaryExpr());
-  pt::Expr assignee = _stack.pop();
+  pt::NodeId assignee = _stack.pop();
   visit(ctx->expr());
-  pt::Expr val = _stack.pop();
+  pt::NodeId val = _stack.pop();
 
-  auto* expr = pt::Assign::Create(*_ctx, assignee, val);
+  pt::NodeId expr = _ctx->create<pt::Assign>(assignee, val).id();
   _block->add(expr);
 
   return {};
 }
 
 std::any Visitor::visitVarE(parser::XParser::VarEContext* ctx) {
-  _stack.push(pt::DeclRef::Create(*_ctx, pt::Path({ctx->Ident()->getText()})));
+  _stack.push(
+      _ctx->create<pt::DeclUse>(pt::Path({ctx->Ident()->getText()})).id());
 
   return {};
 }
@@ -263,19 +265,20 @@ std::any Visitor::visitStructDef(parser::XParser::StructDefContext* ctx) {
     fields.push_back(parse_field(field));
   }
 
-  _module->define(
-      pt::StructDecl::Create(*_ctx, ctx->name->getText(), std::move(fields)));
+  _ctx->add_item(
+      _ctx->create<pt::StructDecl>(ctx->name->getText(), std::move(fields))
+          .id());
 
   return {};
 }
 
 std::any Visitor::visitWhile(parser::XParser::WhileContext* ctx) {
   visit(ctx->expr());
-  pt::Expr cond = _stack.pop();
+  pt::NodeId cond = _stack.pop();
   visitBlock(ctx->block());
-  pt::Block* body = std::get<pt::Block*>(_stack.pop());
+  pt::NodeId body = _stack.pop();
 
-  _block->add(pt::While::Create(*_ctx, cond, body));
+  _block->add(_ctx->create<pt::While>(cond, body).id());
 
   return {};
 }
@@ -287,8 +290,9 @@ std::any Visitor::visitEnumDef(parser::XParser::EnumDefContext* ctx) {
     variants.push_back(parse_variant(variant));
   }
 
-  _module->define(
-      pt::EnumDecl::Create(*_ctx, ctx->name->getText(), std::move(variants)));
+  _ctx->add_item(
+      _ctx->create<pt::EnumDecl>(ctx->name->getText(), std::move(variants))
+          .id());
 
   return {};
 }
@@ -299,37 +303,30 @@ pt::EnumDecl::Variant Visitor::parse_variant(
 }
 
 std::any Visitor::visitTypeDef(parser::XParser::TypeDefContext* ctx) {
-  pt::TypeDecl* decl =
-      pt::TypeDecl::Create(*_ctx, ctx->name->getText(),
-                           pt::DeclRef::Create(*_ctx, get_path(ctx->path())));
+  pt::NodeId use = _ctx->create<pt::DeclUse>(get_path(ctx->path())).id();
 
-  _module->define(decl);
+  pt::NodeId decl = _ctx->create<pt::TypeDecl>(ctx->name->getText(), use).id();
+
+  _ctx->add_item(decl);
 
   return {};
 }
 
-std::any Visitor::visitMemberAccess(parser::XParser::MemberAccessContext* ctx) {
-  pt::Expr base = _stack.pop();
+std::any Visitor::visitMemberE(parser::XParser::MemberEContext* ctx) {
+  visit(ctx->primaryExpr());
+  pt::NodeId base = _stack.pop();
 
-  pt::Expr expr = pt::FieldAccess::Create(*_ctx, base, ctx->field->getText());
+  pt::NodeId field =
+      _ctx->create<pt::FieldAccess>(base, ctx->Ident()->getText()).id();
 
-  if (ctx->args != nullptr) {
-    std::terminate();
-
-    // visitStructExpr(ctx->args);
-    // expr =
-    //     pt::Call::Create(*_ctx, expr,
-    //     std::get<pt::StructExpr*>(_stack.pop()));
-  }
-
-  _stack.push(expr);
+  _stack.push(field);
 
   return {};
 }
 
 pt::StructDecl::Field Visitor::parse_field(
     parser::XParser::StructFieldContext* ctx) {
-  std::optional<pt::Expr> defVal;
+  std::optional<pt::NodeId> defVal;
   if (ctx->value != nullptr) {
     visit(ctx->value);
     defVal = _stack.pop();
@@ -337,7 +334,7 @@ pt::StructDecl::Field Visitor::parse_field(
 
   return pt::StructDecl::Field{
       .name = ctx->name->getText(),
-      .type = pt::DeclRef::Create(*_ctx, get_path(ctx->path())),
+      .type = _ctx->create<pt::DeclUse>(get_path(ctx->path())).id(),
       .defaultVal = defVal,
   };
 }

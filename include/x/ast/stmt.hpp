@@ -7,6 +7,8 @@ namespace x::ast {
 
 class Stmt {
  public:
+  virtual ~Stmt() = default;
+
   enum StmtKind {
     SK_Return,
     SK_Function,
@@ -23,7 +25,7 @@ class Stmt {
     SK_Call,
     SK_Block,
     SK_Builtin,
-    SK_DeclRef,
+    SK_VarRef,
     SK_FieldAccess,
     SK_ExprEnd,
   };
@@ -37,52 +39,51 @@ class Stmt {
   StmtKind _kind;
 };
 
-class Return : public Stmt, public AllowAlloc<Context, Return> {
-  friend AllowAlloc;
-
+class Return : public Stmt {
  public:
-  Expr* _val;
+  ~Return() override;
 
- private:
-  explicit Return(Expr* val) : Stmt(SK_Return), _val(val) {};
+  Ptr<Expr> _val;
 
- public:
+  explicit Return(Ptr<Expr> val);
+
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_Return;
   }
 };
 
-class Assign : public Stmt, public AllowAlloc<Context, Assign> {
-  friend AllowAlloc;
-
- public:
-  /// needs to be lvalue-able
-  not_null<Expr*> _variable;
-
-  not_null<Expr*> _value;
-
- private:
-  Assign(not_null<Expr*> variable, not_null<Expr*> value)
-      : Stmt(StmtKind::SK_Assign), _variable(variable), _value(value) {}
-
- public:
-  static bool classof(Stmt const* expr) {
-    return expr->get_kind() == SK_Assign;
-  }
-};
-
-class While : public Stmt, public AllowAlloc<Context, While> {
- public:
-  not_null<Expr*> _cond;
-  not_null<Block*> _body;
-
- private:
-  friend AllowAlloc;
-  While(not_null<Expr*> cond, not_null<Block*> body)
-      : Stmt(StmtKind::SK_While), _cond(cond), _body(body) {}
-
- public:
-  static bool classof(Stmt const* expr) { return expr->get_kind() == SK_While; }
-};
+// class Assign : public Stmt, public AllowAlloc<Context, Assign> {
+//   friend AllowAlloc;
+//
+//  public:
+//   /// needs to be lvalue-able
+//   not_null<Expr*> _variable;
+//
+//   not_null<Expr*> _value;
+//
+//  private:
+//   Assign(not_null<Expr*> variable, not_null<Expr*> value)
+//       : Stmt(StmtKind::SK_Assign), _variable(variable), _value(value) {}
+//
+//  public:
+//   static bool classof(Stmt const* expr) {
+//     return expr->get_kind() == SK_Assign;
+//   }
+// };
+//
+// class While : public Stmt, public AllowAlloc<Context, While> {
+//  public:
+//   not_null<Expr*> _cond;
+//   not_null<Block*> _body;
+//
+//  private:
+//   friend AllowAlloc;
+//   While(not_null<Expr*> cond, not_null<Block*> body)
+//       : Stmt(StmtKind::SK_While), _cond(cond), _body(body) {}
+//
+//  public:
+//   static bool classof(Stmt const* expr) { return expr->get_kind() ==
+//   SK_While; }
+// };
 
 }  // namespace x::ast

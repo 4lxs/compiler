@@ -47,7 +47,7 @@
             pkgs.cppcheck
             pkgs.include-what-you-use
             pkgs.cmakeCurses
-            pkgs.gdb
+            llvm.lldb
           ];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [llvm.libstdcxxClang];
         };
