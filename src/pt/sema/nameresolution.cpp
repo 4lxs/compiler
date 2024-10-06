@@ -19,12 +19,13 @@ Name const &NameResolver::get_name(NameRef ref) const {
 }
 
 Name const &NameResolver::define_name(Decl &decl) {
-  OptNameRef res = lookup(decl.name(*_ctx), true);
+  spdlog::info("defining: {}", decl.name());
+  OptNameRef res = lookup(decl.name(), true);
 
   if (res.has_value()) {
     Name &name = get_name(res.value());
     if (name._definition.has_value()) {
-      xerr("redefinition of item {}", decl.name(*_ctx));
+      xerr("redefinition of item {}", decl.name());
     }
 
     name._definition = decl.id();
@@ -45,7 +46,7 @@ Name const &NameResolver::define_name(Decl &decl) {
   return std::get<Name>(_names.back());
 }
 
-Name const &NameResolver::use_name(std::string name) {
+Name const &NameResolver::use_name(std::string const &name) {
   OptNameRef res = lookup(name, false);
   if (res.has_value()) {
     return get_name(res.value());

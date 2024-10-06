@@ -13,7 +13,6 @@ class Stmt {
     SK_Return,
     SK_Function,
     SK_VarDecl,
-    SK_Assign,
     SK_While,
 
     SK_Expr,
@@ -31,6 +30,10 @@ class Stmt {
   };
 
   [[nodiscard]] StmtKind get_kind() const { return _kind; }
+
+  [[nodiscard]] bool is_expr() const {
+    return _kind > SK_Expr && _kind < SK_ExprEnd;
+  }
 
  protected:
   explicit Stmt(StmtKind kind) : _kind(kind) {}
@@ -52,25 +55,6 @@ class Return : public Stmt {
   }
 };
 
-// class Assign : public Stmt, public AllowAlloc<Context, Assign> {
-//   friend AllowAlloc;
-//
-//  public:
-//   /// needs to be lvalue-able
-//   not_null<Expr*> _variable;
-//
-//   not_null<Expr*> _value;
-//
-//  private:
-//   Assign(not_null<Expr*> variable, not_null<Expr*> value)
-//       : Stmt(StmtKind::SK_Assign), _variable(variable), _value(value) {}
-//
-//  public:
-//   static bool classof(Stmt const* expr) {
-//     return expr->get_kind() == SK_Assign;
-//   }
-// };
-//
 // class While : public Stmt, public AllowAlloc<Context, While> {
 //  public:
 //   not_null<Expr*> _cond;

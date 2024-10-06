@@ -146,7 +146,7 @@ class NameResolver {
 
   Name const &define_name(Decl &decl);
 
-  Name const &use_name(std::string name);
+  Name const &use_name(std::string const &name);
 
   void enter_scope() {
     spdlog::info("enter scope");

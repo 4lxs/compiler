@@ -56,9 +56,7 @@ class Expr : public Stmt {
   Rc<Type> _type;
 
  public:
-  static bool classof(Stmt const* expr) {
-    return expr->get_kind() > SK_Expr && expr->get_kind() < SK_ExprEnd;
-  }
+  static bool classof(Stmt const* expr) { return expr->is_expr(); }
 };
 
 class IntegerLiteral : public Expr {
@@ -135,65 +133,30 @@ class IntegerLiteral : public Expr {
 class Block : public Expr {
  public:
   /// note that terminator needs to be initialized with a type
-  explicit Block(std::vector<Ptr<ast::Stmt>> body,
-                 std::vector<Rc<ast::Decl>> localvars)
-      : Expr(SK_Block, nullptr),
-        _body(std::move(body)),
-        _localvars(std::move(localvars)) {}
+  explicit Block(std::vector<Ptr<ast::Stmt>> body)
+      : Expr(SK_Block, nullptr), _body(std::move(body)) {}
 
   std::vector<Ptr<ast::Stmt>> _body;
-  std::vector<Rc<ast::Decl>> _localvars;
 
- public:
   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Block; }
 };
-//
-// class If : public Expr, public AllowAlloc<Context, If> {
-//   friend AllowAlloc;
-//
-//  public:  // TODO: temp
-//   not_null<Expr*> _cond;
-//   not_null<Block*> _then;
-//   Block* _else{};
-//
-//  private:
-//   If(not_null<Expr*> cond, not_null<Block*> then, Block* els)
-//       : Expr(SK_If, then->type()), _cond(cond), _then(then), _else(els) {
-//     assert(then->type() == els->type());
-//   }
-//
-//  public:
-//   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_If; }
-// };
-//
-// class Builtin : public Expr, public AllowAlloc<Context, Builtin> {
-//   friend AllowAlloc;
-//
-//  public:  // TODO: temp
-//   enum class Op {
-//     Start2,  // 2 argument operations
-//     iAdd,
-//     iSub,
-//     iMul,
-//     iDiv,
-//     iLess,
-//     iGreater,
-//     Start3,
-//   };
-//
-//   std::vector<Expr*> _args;
-//
-//   Op _op;
-//
-//  private:
-//   Builtin(Op opr, std::vector<Expr*>&& args, not_null<Type*> returnType)
-//       : Expr(SK_Builtin, returnType), _args(args), _op(opr) {}
-//
-//  public:
-//   static bool classof(Stmt const* expr) {
-//     return expr->get_kind() == SK_Builtin;
-//   }
-// };
+
+class If : public Expr {
+ public:
+  Ptr<Expr> _cond;
+  Ptr<Block> _then;
+  Ptr<Block> _else;  // nullable
+
+  If(Ptr<Expr> cond, Ptr<Block> then, Ptr<Block> els)
+      : Expr(SK_If, then->type()),
+        _cond(std::move(cond)),
+        _then(std::move(then)),
+        _else(std::move(els)) {
+    assert(!_else || _else->type() == _then->type());
+  }
+
+  static bool classof(Stmt const* expr) { return expr->get_kind() == SK_If; }
+};
 
 class VarRef : public Expr {
  public:
@@ -222,5 +185,42 @@ class VarRef : public Expr {
 //     return expr->get_kind() == SK_FieldAccess;
 //   }
 // };
+
+class Builtin : public Expr {
+ public:
+  enum class Op {
+    Start2,  // 2 argument operations
+    Assign,
+    iAdd,
+    iSub,
+    iMul,
+    iDiv,
+    iLess,
+    iGreater,
+    Start3,
+  };
+
+  static Ptr<Builtin> CreateAssignment(Ptr<VarRef> lhs, Ptr<Expr> rhs) {
+    Rc<Type> type = lhs->type();
+    std::vector<Ptr<Expr>> args;
+    args.push_back(std::move(lhs));
+    args.push_back(std::move(rhs));
+    return std::make_unique<Builtin>(Op::Assign, std::move(args),
+                                     std::move(type));
+  }
+
+  std::vector<Ptr<Expr>> _args;
+
+  Op _op;
+
+  Builtin(Op opr, std::vector<Ptr<Expr>>&& args, Rc<Type> returnType)
+      : Expr(SK_Builtin, std::move(returnType)),
+        _args(std::move(args)),
+        _op(opr) {}
+
+  static bool classof(Stmt const* expr) {
+    return expr->get_kind() == SK_Builtin;
+  }
+};
 
 }  // namespace x::ast

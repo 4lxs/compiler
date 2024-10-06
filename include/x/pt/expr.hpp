@@ -53,10 +53,19 @@ class IfExpr : public Node {
   NodeId then;
   std::optional<NodeId> else_;
 
+  void nameres(sema::NameResolver &res) override;
+
+  void dump(Context &ctx, uint8_t indent) override;
+
  private:
   friend Context;
   IfExpr(NodeId cond, NodeId then, std::optional<NodeId> els)
       : Node(Node::Kind::If), cond(cond), then(then), else_(els) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::If;
+  }
 };
 
 class BinaryNode : public Node {
@@ -74,10 +83,19 @@ class BinaryNode : public Node {
   NodeId r;
   Operator op;
 
+  void nameres(sema::NameResolver &res) override;
+
+  void dump(Context &ctx, uint8_t indent) override;
+
  private:
   friend Context;
   BinaryNode(NodeId lhs, NodeId rhs, Operator opr)
       : Node(Node::Kind::Binary), l(lhs), r(rhs), op(opr) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::Binary;
+  }
 };
 
 class ParenNode : public Node {

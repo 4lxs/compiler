@@ -35,6 +35,10 @@ class Decl {
     return _kind >= DeclKind::Type && _kind < DeclKind::TypeEnd;
   }
 
+  [[nodiscard]] bool is_value() const {
+    return _kind > DeclKind::ValueBegin && _kind < DeclKind::ValueEnd;
+  }
+
   [[nodiscard]] std::string_view name() const { return _name; }
 
  protected:
@@ -59,10 +63,7 @@ class ValueDecl : public Decl {
 
   Rc<Type> _type;
 
-  static bool classof(Decl const* decl) {
-    return decl->get_kind() > DeclKind::ValueBegin &&
-           decl->get_kind() < DeclKind::ValueEnd;
-  }
+  static bool classof(Decl const* decl) { return decl->is_value(); }
 };
 
 class FnDecl : public ValueDecl {

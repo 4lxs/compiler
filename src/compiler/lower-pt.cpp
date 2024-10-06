@@ -55,21 +55,21 @@ struct Data {
         _ast->_types.push_back(astdecl);
         return decl = std::move(astdecl);
       }
-      case pt::Node::Kind::VarDecl:
-        return decl = lower_var(llvm::cast<pt::VarDecl>(node));
+      case pt::Node::Kind::VarDecl: {
+        // NOTE: vardecl is a decl and possibly a stmt (if it has a value).
+        // this only handles the decl part.
+        auto& vardecl = llvm::cast<pt::VarDecl>(node);
+        return decl = std::make_unique<ast::VarDecl>(vardecl.name(),
+                                                     get_type(vardecl._type));
+      }
       default:
         xerr("unable to lower decl {}", fmt::underlying(node.kind()));
     }
   }
 
-  Ptr<ast::VarDecl> lower_var(pt::VarDecl& node) {
-    return std::make_unique<ast::VarDecl>(node.name(*_pt),
-                                          get_type(node._type));
-  }
-
   Rc<ast::LiteralTy> lower_primitive(pt::Primitive& node) {
     return _ast->_int32Ty = std::make_unique<ast::LiteralTy>(
-               ast::LiteralTy::Kind::I32, node.name(*_pt));
+               ast::LiteralTy::Kind::I32, node.name());
   }
 
   Ptr<ast::FnDecl> lower_fn(pt::FnDecl& node,
@@ -107,11 +107,18 @@ struct Data {
 
     Rc<ast::Type> rettype = get_type(node._retTy);
 
+    auto oldfn = std::move(_currentFunction);
+    _currentFunction = std::make_unique<CurrFn>();
+
     Ptr<ast::Block> body = lower_block(node._body);
 
-    return std::make_unique<ast::FnDecl>(node.name(*_pt), std::move(params),
-                                         rettype, std::move(body),
-                                         std::move(body->_localvars));
+    auto retFn = std::make_unique<ast::FnDecl>(
+        node.name(), std::move(params), rettype, std::move(body),
+        std::move(_currentFunction->localvars));
+
+    _currentFunction = std::move(oldfn);
+
+    return retFn;
   }
 
   Rc<ast::Type> get_type(pt::NodeId nodeid) {
@@ -140,20 +147,23 @@ struct Data {
   }
 
   Ptr<ast::Block> lower_block(pt::Block& node) {
-    std::vector<Ptr<ast::Stmt>> stmts;
-    std::vector<Rc<ast::Decl>> localvars;
+    auto oldblock = std::move(_currentBlock);
+    _currentBlock = std::make_unique<CurrBlock>();
 
     for (pt::NodeId stmtnodeid : node._body) {
       pt::Node& stmtnode = _pt->get_node(stmtnodeid);
 
-      // vardecl is a decl and a stmt. we need to treat it as a decl, so we
-      // check for those first
+      if (!stmtnode.is_decl() && !stmtnode.is_stmt()) {
+        xerr("expected stmt or decl, got {}", fmt::underlying(stmtnode.kind()));
+      }
+
+      // NOTE: vardecl is a decl and a stmt. we need to declare it first, before
+      // assigning to it
       if (stmtnode.is_decl()) {
-        localvars.push_back(lower_decl(stmtnode));
-      } else if (stmtnode.is_stmt()) {
-        stmts.push_back(lower_stmt(stmtnode));
-      } else {
-        xerr("expected stmt, got {}", fmt::underlying(stmtnode.kind()));
+        _currentFunction->localvars.push_back(lower_decl(stmtnode));
+      }
+      if (stmtnode.is_stmt()) {
+        lower_stmt(stmtnode);
       }
 
       // std::visit(overloaded{
@@ -189,18 +199,45 @@ struct Data {
       //            stmt);
     }
 
-    return std::make_unique<ast::Block>(std::move(stmts), std::move(localvars));
+    auto ret = std::make_unique<ast::Block>(std::move(_currentBlock->stmts));
+    _currentBlock = std::move(oldblock);
+    return ret;
   }
 
-  Ptr<ast::Stmt> lower_stmt(pt::Node& node) {
+  /// NOTE: it adds the stmt to the _currentBlock
+  void lower_stmt(pt::Node& node) {
+    if (node.is_expr()) {
+      _currentBlock->stmts.push_back(lower_expr(node.id()));
+      return;
+    }
     switch (node.kind()) {
       case pt::Node::Kind::Return: {
         auto& ret = llvm::cast<pt::Return>(node);
         Ptr<ast::Expr> retval =
             ret._retVal.has_value() ? lower_expr(*ret._retVal) : nullptr;
 
-        return std::make_unique<ast::Return>(std::move(retval));
-      }
+        _currentBlock->stmts.push_back(
+            std::make_unique<ast::Return>(std::move(retval)));
+      } break;
+      case pt::Node::Kind::VarDecl: {
+        // NOTE: vardecl is a decl and a stmt. this only handles the stmt part
+        auto& vardecl = llvm::cast<pt::VarDecl>(node);
+        if (!vardecl._val.has_value()) {
+          break;
+        }
+
+        Rc<ast::Decl> decl = lower_decl(vardecl);
+        if (decl->get_kind() != ast::Decl::DeclKind::Var) {
+          xerr("expected value decl, got {}",
+               fmt::underlying(decl->get_kind()));
+        }
+        auto astVar = std::static_pointer_cast<ast::VarDecl>(std::move(decl));
+        auto lhs = std::make_unique<ast::VarRef>(astVar, astVar->type());
+        Ptr<ast::Expr> val = lower_expr(*vardecl._val);
+
+        _currentBlock->stmts.push_back(
+            ast::Builtin::CreateAssignment(std::move(lhs), std::move(val)));
+      } break;
       default:
         xerr("unable to lower stmt: {}", fmt::underlying(node.kind()));
     }
@@ -225,6 +262,33 @@ struct Data {
         auto var = std::static_pointer_cast<ast::VarDecl>(std::move(decl));
         return std::make_unique<ast::VarRef>(var, var->type());
       }
+      case pt::Node::Kind::If: {
+        auto& ifnode = llvm::cast<pt::IfExpr>(node);
+        Ptr<ast::Expr> cond = lower_expr(ifnode.cond);
+        Ptr<ast::Block> then = lower_block(ifnode.then);
+        Ptr<ast::Block> els;
+        if (ifnode.else_.has_value()) {
+          els = lower_block(ifnode.else_.value());
+        }
+        return std::make_unique<ast::If>(std::move(cond), std::move(then),
+                                         std::move(els));
+      }
+      case pt::Node::Kind::Binary: {
+        auto& binnode = llvm::cast<pt::BinaryNode>(node);
+        std::vector<Ptr<ast::Expr>> args;
+        args.push_back(lower_expr(binnode.l));
+        args.push_back(lower_expr(binnode.r));
+
+        using PtOp = pt::BinaryNode::Operator;
+        using AstOp = ast::Builtin::Op;
+        std::map<PtOp, AstOp> table{
+            {PtOp::Less, AstOp::iLess}, {PtOp::Greater, AstOp::iGreater},
+            {PtOp::Plus, AstOp::iAdd},  {PtOp::Minus, AstOp::iSub},
+            {PtOp::Star, AstOp::iMul},  {PtOp::Slash, AstOp::iDiv},
+        };
+        return std::make_unique<ast::Builtin>(
+            table.at(binnode.op), std::move(args), args.front()->type());
+      }
       default:
         xerr("unable to lower expr: {}", fmt::underlying(node.kind()));
     }
@@ -234,6 +298,17 @@ struct Data {
   std::unique_ptr<ast::Context> _ast = std::make_unique<ast::Context>();
 
   std::map<pt::NodeId, Rc<ast::Decl>> _decls;
+
+  // NOTE: a global fn may be called from within another fn
+  struct CurrFn {
+    std::vector<Rc<ast::Decl>> localvars;
+  };
+  Ptr<CurrFn> _currentFunction;
+
+  struct CurrBlock {
+    std::vector<Ptr<ast::Stmt>> stmts;
+  };
+  Ptr<CurrBlock> _currentBlock;
 };
 
 std::unique_ptr<ast::Context> lower_pt(std::unique_ptr<pt::Context> pt) {

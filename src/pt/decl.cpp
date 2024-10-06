@@ -6,19 +6,10 @@
 
 namespace x::pt {
 
-std::string const &Decl::name(Context const &ctx) const {
-  if (!_resolvedName.has_value()) {
-    return _name;
-  }
-  Node const &node = ctx.get_node(_resolvedName.value());
-  Decl const &useDecl = llvm::cast<Decl>(node);
-  return useDecl.name(ctx);
-}
+void Primitive::nameres(sema::NameResolver & /*res*/) {}
 
-void Primitive::nameres(sema::NameResolver &res) {}
-
-void Primitive::dump(Context &ctx, uint8_t indent) {
-  fmt::print("{:{}}Primitive: {}\n", "", indent, name(ctx));
+void Primitive::dump(Context & /*ctx*/, uint8_t indent) {
+  fmt::print("{:{}}Primitive: {}\n", "", indent, name());
 }
 
 void FnDecl::nameres(sema::NameResolver &res) {
@@ -37,7 +28,7 @@ void FnDecl::nameres(sema::NameResolver &res) {
 }
 
 void FnDecl::dump(Context &ctx, uint8_t indent) {
-  fmt::print("{:{}}FnDecl: {}\n", "", indent, name(ctx));
+  fmt::print("{:{}}FnDecl: {}\n", "", indent, name());
   fmt::print("{:{}}ret:\n", "", indent + 1);
   ctx.get_node(_retTy).dump(ctx, indent + 2);
   fmt::print("{:{}}body:\n", "", indent + 1);
@@ -55,7 +46,7 @@ void VarDecl::nameres(sema::NameResolver &res) {
 }
 
 void VarDecl::dump(Context &ctx, uint8_t indent) {
-  fmt::print("{:{}}VarDecl: {}\n", "", indent, name(ctx));
+  fmt::print("{:{}}VarDecl: {}\n", "", indent, name());
   fmt::print("{:{}}type:\n", "", indent + 1);
   ctx.get_node(_type).dump(ctx, indent + 2);
   if (_val.has_value()) {
