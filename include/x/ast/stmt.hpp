@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fwd_decl.hpp"
+#include "x/ast/label.hpp"
 #include "x/common.hpp"
 
 namespace x::ast {
@@ -13,7 +14,7 @@ class Stmt {
     SK_Return,
     SK_Function,
     SK_VarDecl,
-    SK_While,
+    SK_Loop,
 
     SK_Expr,
     SK_Int,
@@ -44,30 +45,30 @@ class Stmt {
 
 class Return : public Stmt {
  public:
+  /// handles all kinds of returns. that is local returns, function returns,
+  /// loop breaks, ...
+  /// @param block signifies the block from which to return. it needs
+  /// to be a parent of this stmt
+  explicit Return(Ptr<Expr> val, Rc<Label> block = nullptr);
   ~Return() override;
 
   Ptr<Expr> _val;
-
-  explicit Return(Ptr<Expr> val);
+  Rc<Label> _blockLbl;
 
   static bool classof(Stmt const* expr) {
     return expr->get_kind() == SK_Return;
   }
 };
 
-// class While : public Stmt, public AllowAlloc<Context, While> {
-//  public:
-//   not_null<Expr*> _cond;
-//   not_null<Block*> _body;
-//
-//  private:
-//   friend AllowAlloc;
-//   While(not_null<Expr*> cond, not_null<Block*> body)
-//       : Stmt(StmtKind::SK_While), _cond(cond), _body(body) {}
-//
-//  public:
-//   static bool classof(Stmt const* expr) { return expr->get_kind() ==
-//   SK_While; }
-// };
+class Loop : public Stmt {
+ public:
+  Ptr<Block> _body;
+
+  explicit Loop(Ptr<Block> body);
+  ~Loop() override;
+
+ public:
+  static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Loop; }
+};
 
 }  // namespace x::ast

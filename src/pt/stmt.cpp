@@ -24,12 +24,22 @@ void Assign::dump(Context &ctx, uint8_t indent) {
   ctx.get_node(_value).dump(ctx, indent + 2);
 }
 
+void Assign::nameres(sema::NameResolver &res) {
+  res._ctx->get_node(_assignee).nameres(res);
+  res._ctx->get_node(_value).nameres(res);
+}
+
 void While::dump(Context &ctx, uint8_t indent) {
   fmt::print("{:{}}While ", "", indent);
   fmt::print("{:{}}cond: \n", "", indent + 1);
   ctx.get_node(_cond).dump(ctx, indent + 2);
   fmt::print("{:{}}body: \n", "", indent + 1);
   ctx.get_node(_body).dump(ctx, indent + 2);
+}
+
+void While::nameres(sema::NameResolver &res) {
+  res._ctx->get_node(_cond).nameres(res);
+  res._ctx->get_node(_body).nameres(res);
 }
 
 }  // namespace x::pt

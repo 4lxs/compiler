@@ -34,6 +34,8 @@ class Assign : public Node {
 
   void dump(Context& ctx, uint8_t indent) override;
 
+  void nameres(sema::NameResolver& res) override;
+
  private:
   friend Context;
   explicit Assign(NodeId assignee, NodeId value)
@@ -51,6 +53,8 @@ class While : public Node {
   NodeId _body;
 
   void dump(Context& ctx, uint8_t indent) override;
+
+  void nameres(sema::NameResolver& res) override;
 
  private:
   friend Context;

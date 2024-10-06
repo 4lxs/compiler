@@ -93,56 +93,30 @@ class Compiler {
     switch (stmt.get_kind()) {
       case ast::Stmt::SK_Return: {
         auto const& ret = llvm::cast<ast::Return>(stmt);
-        spdlog::info("ret");
-        _builder.CreateRet(get_deref(eval(ret._val.get())));
+        if (ret._blockLbl) {
+          _currentBlock.createBr(_builder, ret._blockLbl->block()._llvmEnd);
+        } else {
+          _builder.CreateRet(get_deref(eval(ret._val.get())));
+        }
       } break;
-        // case ast::Stmt::SK_Int:
-        // case ast::Stmt::SK_Bool:
-        // case ast::Stmt::SK_String:
-        // case ast::Stmt::SK_Struct:
-        // case ast::Stmt::SK_If:
-        // case ast::Stmt::SK_Call:
-        // case ast::Stmt::SK_VarRef:
-        // case ast::Stmt::SK_Block:
-        //   eval(stmt);
-        //   break;
-        // case ast::Stmt::SK_Function:
-        //   // all functions should live in context._functions
-        // case ast::Stmt::SK_Expr:
-        // case ast::Stmt::SK_ExprEnd:
-        //   throw std::runtime_error("unexpected stmt");
-        // case ast::Stmt::SK_Builtin:
-        //   break;
-        // case ast::Stmt::SK_VarDecl: {
-        //   auto* decl = llvm::cast<ast::VarDecl>(stmt);
-        //   llvm::AllocaInst* allocaInst = _builder.CreateAlloca(
-        //       decl->type()->_llvmType, nullptr, decl->name());
-        //   decl->_alloca = allocaInst;
-        // } break;
-        // case ast::Stmt::SK_FieldAccess: {
-        //   assert(false);
-        // } break;
-        // case ast::Stmt::SK_While:
-        //   auto* ass = llvm::cast<ast::While>(stmt);
-        //
-        //   auto* cond = llvm::BasicBlock::Create(_ctx, "wCond",
-        //   _currentFunction); auto* body = llvm::BasicBlock::Create(_ctx,
-        //   "wBody"); auto* end = llvm::BasicBlock::Create(_ctx, "wEnd");
-        //
-        //   _builder.CreateBr(cond);
-        //
-        //   _builder.SetInsertPoint(cond);
-        //   Value condVal = eval(ass->_cond);
-        //   _builder.CreateCondBr(get_deref(condVal), body, end);
-        //
-        //   _builder.SetInsertPoint(body);
-        //   _currentFunction->insert(_currentFunction->end(), body);
-        //   compile(ass->_body);
-        //   _builder.CreateBr(cond);
-        //
-        //   _currentFunction->insert(_currentFunction->end(), end);
-        //   _builder.SetInsertPoint(end);
-        //   break;
+      case ast::Stmt::SK_Loop: {
+        auto const& loopStmt = llvm::cast<ast::Loop>(stmt);
+
+        auto* loop = llvm::BasicBlock::Create(_ctx, "loop", _currentFunction);
+        auto* end = llvm::BasicBlock::Create(_ctx, "loopEnd");
+
+        _builder.CreateBr(loop);
+        _builder.SetInsertPoint(loop);
+
+        auto oldBlock = _currentBlock;
+        _currentBlock = CurrBlock{end};
+        compile(*loopStmt._body);
+        _currentBlock.createBr(_builder, loop);
+        _currentBlock = oldBlock;
+
+        _currentFunction->insert(_currentFunction->end(), end);
+        _builder.SetInsertPoint(end);
+      } break;
       default:
         xerr("unimplemented stmt compile {}", fmt::underlying(stmt.get_kind()));
     }
@@ -172,25 +146,34 @@ class Compiler {
         llvm::Value* cond = get_deref(eval(ife._cond.get()));
 
         assert(_currentFunction != nullptr);
-        auto* then = llvm::BasicBlock::Create(_ctx, "then", _currentFunction);
-        auto* els = llvm::BasicBlock::Create(_ctx, "else");
-        auto* end = llvm::BasicBlock::Create(_ctx, "end");
+        auto* then = llvm::BasicBlock::Create(_ctx, "iftrue", _currentFunction);
+        auto* end = llvm::BasicBlock::Create(_ctx, "ifend");
+        auto* els = ife._else ? llvm::BasicBlock::Create(_ctx, "iffalse") : end;
 
         _builder.CreateCondBr(cond, then, els);
 
-        _builder.SetInsertPoint(then);
-        Value thenVal = eval(ife._then.get());
-        _builder.CreateBr(end);
+        CurrBlock oldBlock = _currentBlock;
 
-        _currentFunction->insert(_currentFunction->end(), els);
-        _builder.SetInsertPoint(els);
-        Value elseVal = eval(ife._else.get());
-        _builder.CreateBr(end);
+        _builder.SetInsertPoint(then);
+        _currentBlock = CurrBlock{end};
+        Value thenVal = eval(ife._then.get());
+        _currentBlock.createBr(_builder);
+
+        Value elseVal;
+        if (ife._else) {
+          _currentFunction->insert(_currentFunction->end(), els);
+          _builder.SetInsertPoint(els);
+          _currentBlock = CurrBlock{end};
+          elseVal = eval(ife._else.get());
+          _currentBlock.createBr(_builder);
+        }
 
         _currentFunction->insert(_currentFunction->end(), end);
         _builder.SetInsertPoint(end);
 
-        if (!thenVal || !elseVal) {
+        _currentBlock = oldBlock;
+
+        if (!thenVal) {
           return {};
         }
 
@@ -203,57 +186,67 @@ class Compiler {
       }
       case ast::Stmt::SK_Builtin: {
         auto const& builtin = llvm::cast<ast::Builtin>(expr);
-        switch (builtin._op) {
-          case ast::Builtin::Op::iAdd:
-            return Value{
-                _builder.CreateAdd(get_deref(eval(builtin._args.at(0).get())),
-                                   get_deref(eval(builtin._args.at(1).get())))};
-          case ast::Builtin::Op::iLess:
-            return Value{_builder.CreateICmpULT(
-                get_deref(eval(builtin._args.at(0).get())),
-                get_deref(eval(builtin._args.at(1).get())))};
-          case ast::Builtin::Op::Start2:
-          case ast::Builtin::Op::Start3:
-            throw std::runtime_error("invalid builtin");
-          case ast::Builtin::Op::iSub:
-            return Value{
-                _builder.CreateSub(get_deref(eval(builtin._args.at(0).get())),
-                                   get_deref(eval(builtin._args.at(1).get())))};
-          case ast::Builtin::Op::iMul:
-            return Value{
-                _builder.CreateMul(get_deref(eval(builtin._args.at(0).get())),
-                                   get_deref(eval(builtin._args.at(1).get())))};
-          case ast::Builtin::Op::iDiv:
-            return Value{_builder.CreateUDiv(
-                get_deref(eval(builtin._args.at(0).get())),
-                get_deref(eval(builtin._args.at(1).get())))};
-          case ast::Builtin::Op::iGreater:
-            return Value{_builder.CreateICmpUGT(
-                get_deref(eval(builtin._args.at(0).get())),
-                get_deref(eval(builtin._args.at(1).get())))};
-          case ast::Builtin::Op::Assign:
-            Value lhs = eval(builtin._args.at(0).get());
-            Value val = eval(builtin._args.at(1).get());
-            assert(lhs.isPtr());
-
-            _builder.CreateStore(get_deref(val), lhs._llvmV);
-            return {};
+        if (builtin._args.size() == 1) {
+          Value arg0 = eval(builtin._args.at(0).get());
+          switch (builtin._op) {
+            case ast::Builtin::Op::Not:
+              return Value{_builder.CreateNot(get_deref(arg0))};
+            default:
+              break;
+          }
+        } else if (builtin._args.size() == 2) {
+          Value arg0 = eval(builtin._args.at(0).get());
+          Value arg1 = eval(builtin._args.at(1).get());
+          switch (builtin._op) {
+            case ast::Builtin::Op::iAdd:
+              return Value{
+                  _builder.CreateAdd(get_deref(arg0), get_deref(arg1))};
+            case ast::Builtin::Op::iLess:
+              return Value{
+                  _builder.CreateICmpULT(get_deref(arg0), get_deref(arg1))};
+            case ast::Builtin::Op::iSub:
+              return Value{
+                  _builder.CreateSub(get_deref(arg0), get_deref(arg1))};
+            case ast::Builtin::Op::iMul:
+              return Value{
+                  _builder.CreateMul(get_deref(arg0), get_deref(arg1))};
+            case ast::Builtin::Op::iDiv:
+              return Value{
+                  _builder.CreateUDiv(get_deref(arg0), get_deref(arg1))};
+            case ast::Builtin::Op::iGreater:
+              return Value{
+                  _builder.CreateICmpUGT(get_deref(arg0), get_deref(arg1))};
+            case ast::Builtin::Op::Assign:
+              assert(arg0.isPtr());
+              _builder.CreateStore(get_deref(arg1), arg0._llvmV);
+              return {};
+            default:
+              break;
+          }
         }
+        throw std::runtime_error("unhandled builtin operation");
       }
       case ast::Stmt::SK_Block: {
-        auto const& block = llvm::cast<ast::Block>(expr);
+        auto& block = llvm::cast<ast::Block>(expr);
+        if (block._label) {
+          // block._llvmEnd = llvm::BasicBlock::Create(_ctx, "blockEnd");
+          block._llvmEnd = _currentBlock.after;
+        }
         for (Ptr<ast::Stmt> const& stmt : block._body) {
           compile(*stmt);
+        }
+
+        if (block._label) {
+          // _builder.CreateBr(block._llvmEnd);
+          // _currentFunction->insert(_currentFunction->end(), block._llvmEnd);
+          // _builder.SetInsertPoint(block._llvmEnd);
+          block._llvmEnd = nullptr;
         }
 
         return Value{};
       }
       default:
         xerr("unhandled expr {}", fmt::underlying(expr.get_kind()));
-        // case ast::Stmt::SK_Bool:
-        // case ast::Stmt::SK_String:
-        // case ast::Stmt::SK_Struct:
-        //   assert(false);
         // case ast::Stmt::SK_Call: {
         //   auto const& call = llvm::cast<ast::FnCall>(expr);
         //   llvm::Function* calee = _mod.getFunction(call->_fn->name());
@@ -289,15 +282,6 @@ class Compiler {
         // case ast::Stmt::SK_Expr:
         //   // expr is used for void
         //   return Value{llvm::UndefValue::get(llvm::Type::getVoidTy(_ctx))};
-        // case ast::Stmt::SK_Return:
-        // case ast::Stmt::SK_Function:
-        // case ast::Stmt::SK_VarDecl:
-        // case ast::Stmt::SK_Assign:
-        // case ast::Stmt::SK_ExprEnd:
-        // case ast::Stmt::SK_While:
-        //   throw std::runtime_error(
-        //       fmt::format("unexpected stmt {} when expression was expected",
-        //                   fmt::underlying(expr->get_kind())));
     }
   }
 
@@ -370,6 +354,19 @@ class Compiler {
   llvm::Function* _currentFunction{};
 
   struct CurrBlock {
+    /// the block where to jump to break
+    llvm::BasicBlock* after{};
+
+    /// true if br has been called
+    bool finished = false;
+
+    void createBr(llvm::IRBuilder<>& builder,
+                  llvm::BasicBlock* where = nullptr) {
+      if (!finished) {
+        builder.CreateBr(where != nullptr ? where : after);
+        finished = true;
+      }
+    }
   } _currentBlock;
 };
 };  // namespace x

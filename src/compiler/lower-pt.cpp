@@ -238,6 +238,47 @@ struct Data {
         _currentBlock->stmts.push_back(
             ast::Builtin::CreateAssignment(std::move(lhs), std::move(val)));
       } break;
+      case pt::Node::Kind::While: {
+        auto& whilenode = llvm::cast<pt::While>(node);
+
+        auto looplabel = std::make_shared<ast::Label>();
+
+        auto loopTest = [&]() {
+          Ptr<ast::Expr> loopTestCond =
+              ast::Builtin::CreateNot(lower_expr(whilenode._cond));
+          auto breakstmt = std::make_unique<ast::Return>(nullptr, looplabel);
+          std::vector<Ptr<ast::Stmt>> stmts;
+          stmts.push_back(std::move(breakstmt));
+          auto breakblock = std::make_unique<ast::Block>(std::move(stmts));
+          auto loopTest = std::make_unique<ast::If>(
+              std::move(loopTestCond), std::move(breakblock), nullptr);
+
+          return loopTest;
+        }();
+
+        Ptr<ast::Block> body = lower_block(whilenode._body);
+        body->_label = looplabel;
+        looplabel->_block = body.get();
+
+        std::vector<Ptr<ast::Stmt>> stmts;
+        stmts.reserve(body->_body.size() + 1);
+        stmts.push_back(std::move(loopTest));
+        stmts.insert(stmts.end(), std::make_move_iterator(body->_body.begin()),
+                     std::make_move_iterator(body->_body.end()));
+        body->_body = std::move(stmts);
+
+        _currentBlock->stmts.push_back(
+            std::make_unique<ast::Loop>(std::move(body)));
+      } break;
+      case pt::Node::Kind::Assign: {
+        auto& assignNode = llvm::cast<pt::Assign>(node);
+
+        Ptr<ast::Expr> lhs = lower_expr(assignNode._assignee);
+        Ptr<ast::Expr> rhs = lower_expr(assignNode._value);
+
+        _currentBlock->stmts.push_back(
+            ast::Builtin::CreateAssignment(std::move(lhs), std::move(rhs)));
+      } break;
       default:
         xerr("unable to lower stmt: {}", fmt::underlying(node.kind()));
     }

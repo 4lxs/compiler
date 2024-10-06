@@ -10,6 +10,7 @@
 
 #include "fwd_decl.hpp"
 #include "x/ast/context.hpp"
+#include "x/ast/label.hpp"
 #include "x/ast/stmt.hpp"
 #include "x/ast/type.hpp"
 #include "x/common.hpp"
@@ -130,13 +131,35 @@ class IntegerLiteral : public Expr {
 //   }
 // };
 //
+
 class Block : public Expr {
  public:
   /// note that terminator needs to be initialized with a type
-  explicit Block(std::vector<Ptr<ast::Stmt>> body)
-      : Expr(SK_Block, nullptr), _body(std::move(body)) {}
+  explicit Block(std::vector<Ptr<ast::Stmt>> body, Rc<Label> label = nullptr)
+      : Expr(SK_Block, nullptr),
+        _body(std::move(body)),
+        _label(std::move(label)) {
+    if (_label) {
+      if (_label.use_count() == 1) {
+        _label = nullptr;
+      } else {
+        _label->_block = this;
+      }
+    }
+  }
+
+  ~Block() override {
+    if (_label) {
+      _label->_block = nullptr;
+    }
+  };
 
   std::vector<Ptr<ast::Stmt>> _body;
+  Rc<Label> _label;
+
+  // compiler data
+
+  llvm::BasicBlock* _llvmEnd;
 
   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Block; }
 };
@@ -189,6 +212,8 @@ class VarRef : public Expr {
 class Builtin : public Expr {
  public:
   enum class Op {
+    Start1,
+    Not,
     Start2,  // 2 argument operations
     Assign,
     iAdd,
@@ -200,13 +225,19 @@ class Builtin : public Expr {
     Start3,
   };
 
-  static Ptr<Builtin> CreateAssignment(Ptr<VarRef> lhs, Ptr<Expr> rhs) {
-    Rc<Type> type = lhs->type();
+  static Ptr<Builtin> CreateAssignment(Ptr<Expr> lhs, Ptr<Expr> rhs) {
+    // Rc<Type> type = lhs->type();
     std::vector<Ptr<Expr>> args;
     args.push_back(std::move(lhs));
     args.push_back(std::move(rhs));
-    return std::make_unique<Builtin>(Op::Assign, std::move(args),
-                                     std::move(type));
+    return std::make_unique<Builtin>(Op::Assign, std::move(args), nullptr);
+  }
+
+  static Ptr<Builtin> CreateNot(Ptr<Expr> expr) {
+    std::vector<Ptr<Expr>> args;
+    Rc<Type> type = expr->type();
+    args.push_back(std::move(expr));
+    return std::make_unique<Builtin>(Op::Not, std::move(args), std::move(type));
   }
 
   std::vector<Ptr<Expr>> _args;
