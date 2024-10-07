@@ -245,40 +245,40 @@ class Compiler {
 
         return Value{};
       }
+      case ast::Stmt::SK_FieldAccess: {
+        auto const& fieldAccess = llvm::cast<ast::FieldAccess>(expr);
+        spdlog::info("accessing field {} of struct {}",
+                     fieldAccess._field->name(),
+                     fieldAccess._base->type()->name());
+        Value base = eval(fieldAccess._base.get());
+        assert(base.isPtr());
+
+        llvm::Value* ptr = _builder.CreateStructGEP(
+            fieldAccess._base->type()->_llvmType, base._llvmV, 0);
+
+        return Value{ptr, fieldAccess.type()->_llvmType};
+      }
+      case ast::Stmt::SK_Call: {
+        auto const& call = llvm::cast<ast::FnCall>(expr);
+        llvm::Function* calee = _mod.getFunction(call._fn->name());
+        spdlog::info("calling function {} with {} params with {} args",
+                     call._fn->name(), calee->arg_size(),
+                     call._args->_fields.size());
+        assert(calee);
+        assert(calee->arg_size() == call._args->_fields.size());
+
+        std::vector<llvm::Value*> args;
+        args.reserve(calee->arg_size());
+        for (Ptr<ast::Expr> const& field : call._args->_fields) {
+          llvm::Value* val = get_deref(eval(field.get()));
+          assert(val != nullptr);
+          args.push_back(val);
+        }
+
+        return Value{_builder.CreateCall(calee, args)};
+      } break;
       default:
         xerr("unhandled expr {}", fmt::underlying(expr.get_kind()));
-        // case ast::Stmt::SK_Call: {
-        //   auto const& call = llvm::cast<ast::FnCall>(expr);
-        //   llvm::Function* calee = _mod.getFunction(call->_fn->name());
-        //   spdlog::info("calling function {} with {} params with {} args",
-        //                call->_fn->name(), calee->arg_size(),
-        //                call->_args->_fields.size());
-        //   assert(calee);
-        //   assert(calee->arg_size() == call->_args->_fields.size());
-        //
-        //   std::vector<llvm::Value*> args;
-        //   args.reserve(calee->arg_size());
-        //   for (ast::Expr* const& field : call->_args->_fields) {
-        //     llvm::Value* val = get_deref(eval(field));
-        //     assert(val != nullptr);
-        //     args.push_back(val);
-        //   }
-        //
-        //   return Value{_builder.CreateCall(calee, args)};
-        // } break;
-        // case ast::Stmt::SK_FieldAccess: {
-        //   auto const& fieldAccess = llvm::cast<ast::FieldAccess>(expr);
-        //   spdlog::info("accessing field {} of struct {}",
-        //                fieldAccess->_field->name(),
-        //                fieldAccess->_base->type()->name());
-        //   Value base = eval(fieldAccess->_base);
-        //   assert(base.isPtr());
-        //
-        //   llvm::Value* ptr = _builder.CreateStructGEP(
-        //       fieldAccess->_base->type()->_llvmType, base._llvmV, 0);
-        //
-        //   return Value{ptr, fieldAccess->type()->_llvmType};
-        // }
         // case ast::Stmt::SK_Expr:
         //   // expr is used for void
         //   return Value{llvm::UndefValue::get(llvm::Type::getVoidTy(_ctx))};
@@ -319,21 +319,18 @@ class Compiler {
     }
 
     switch (type.get_kind()) {
-      // case ast::Type::DeclKind::Struct: {
-      //   auto* structTy = llvm::cast<ast::StructTy>(type);
-      //   // structTy->_fields
-      //
-      //   std::vector<llvm::Type*> fields;
-      //   fields.reserve(structTy->_fields.size());
-      //
-      //   for (ast::FieldDecl* const& field : structTy->_fields) {
-      //     fields.push_back(to_llvm_type(field->type()));
-      //   }
-      //   type->_llvmType =
-      //       llvm::StructType::create(_ctx, fields, structTy->name());
-      //
-      //   return type->_llvmType;
-      // }
+      case ast::Type::DeclKind::Struct: {
+        auto& structTy = llvm::cast<ast::StructTy>(type);
+
+        std::vector<llvm::Type*> fields;
+        fields.reserve(structTy._fields.size());
+
+        for (Rc<ast::FieldDecl> const& field : structTy._fields) {
+          fields.push_back(to_llvm_type(*field->type()));
+        }
+        return type._llvmType =
+                   llvm::StructType::create(_ctx, fields, structTy.name());
+      }
       case ast::Type::DeclKind::Literal: {
         auto& litTy = llvm::cast<ast::LiteralTy>(type);
         switch (litTy._litkind) {

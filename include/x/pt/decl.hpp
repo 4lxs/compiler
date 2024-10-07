@@ -115,7 +115,7 @@ class VarDecl : public Decl {
   void dump(Context &ctx, uint8_t indent) override;
 };
 
-class StructDecl : public Node {
+class StructDecl : public Decl {
  public:
   struct Field {
     std::string name;
@@ -125,14 +125,15 @@ class StructDecl : public Node {
     std::optional<NodeId> defaultVal;
   };
 
-  std::string _name;
+  void nameres(sema::NameResolver &res) override;
+  void dump(Context &ctx, uint8_t indent) override;
+
   std::vector<Field> _fields;
 
  private:
   friend Context;
   explicit StructDecl(std::string name, std::vector<Field> &&fields)
-      : Node(Node::Kind::StructDecl),
-        _name(std::move(name)),
+      : Decl(Node::Kind::StructDecl, std::move(name)),
         _fields(std::move(fields)) {}
 };
 

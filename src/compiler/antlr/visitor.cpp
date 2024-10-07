@@ -165,7 +165,7 @@ std::any Visitor::visitStructExpr(parser::XParser::StructExprContext* ctx) {
     fields.emplace_back(std::move(name), expr);
   }
 
-  _stack.push(_ctx->create<pt::StructExpr>(std::move(fields)).id());
+  _stack.push(_ctx->create<pt::Struct>(std::move(fields)).id());
 
   return {};
 }

@@ -16,7 +16,7 @@ class Integer;
 class IfExpr;
 class BinaryExpr;
 class ParenExpr;
-class StructExpr;
+class Struct;
 class Call;
 class BoolE;
 class StringE;

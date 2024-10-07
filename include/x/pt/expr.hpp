@@ -141,10 +141,19 @@ class Call : public Node {
   NodeId fn;
   NodeId args;
 
+  void nameres(sema::NameResolver &res) override;
+
+  void dump(Context &ctx, uint8_t indent) override;
+
  private:
   friend Context;
   Call(NodeId func, NodeId args)
       : Node(Node::Kind::Call), fn(func), args(args) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::Call;
+  }
 };
 
 struct Field {
@@ -152,13 +161,17 @@ struct Field {
   NodeId value;
 };
 
-class StructExpr : public Node {
+class Struct : public Node {
  public:
   std::vector<Field> fields;
 
+  void nameres(sema::NameResolver &res) override;
+
+  void dump(Context &ctx, uint8_t indent) override;
+
  private:
   friend Context;
-  explicit StructExpr(std::vector<Field> &&fields)
+  explicit Struct(std::vector<Field> &&fields)
       : Node(Node::Kind::Struct), fields(std::move(fields)) {}
 
  public:
@@ -172,10 +185,19 @@ class FieldAccess : public Node {
   NodeId base;
   std::string field;
 
+  void nameres(sema::NameResolver &res) override;
+
+  void dump(Context &ctx, uint8_t indent) override;
+
  private:
   friend Context;
   FieldAccess(NodeId base, std::string field)
       : Node(Node::Kind::FieldAccess), base(base), field(std::move(field)) {}
+
+ public:
+  static bool classof(Node const *node) {
+    return node->kind() == Node::Kind::FieldAccess;
+  }
 };
 
 }  // namespace x::pt

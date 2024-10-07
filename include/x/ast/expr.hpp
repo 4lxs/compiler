@@ -97,40 +97,18 @@ class IntegerLiteral : public Expr {
 // SK_Bool;
 // //   }
 // // };
-//
-// class StructLiteral : public Expr, public AllowAlloc<Context, StructLiteral>
-// {
-//   friend AllowAlloc;
-//
-//  public:  // TODO: temp
-//   explicit StructLiteral(std::vector<Expr*> fields)
-//       : Expr(SK_Struct, nullptr), _fields(std::move(fields)) {}
-//
-//   StructTy* _type;
-//   std::vector<Expr*> _fields;
-//
-//  public:
-//   static bool classof(Stmt const* expr) {
-//     return expr->get_kind() == SK_Struct;
-//   }
-// };
-//
-// class FnCall : public Expr, public AllowAlloc<Context, FnCall> {
-//   friend AllowAlloc;
-//
-//   /// note that the fn needs to be initialized with a return type
-//   FnCall(not_null<FnDecl*> func, not_null<StructLiteral*> args)
-//       : Expr(SK_Call, func->_ret), _fn(func), _args(args) {}
-//
-//  public:  // TODO: temp
-//   not_null<FnDecl*> _fn;
-//   not_null<StructLiteral*> _args;
-//
-//  public:
-//   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Call;
-//   }
-// };
-//
+
+class StructLiteral : public Expr {
+ public:
+  explicit StructLiteral(std::vector<Ptr<Expr>> fields)
+      : Expr(SK_Struct, nullptr), _fields(std::move(fields)) {}
+
+  std::vector<Ptr<Expr>> _fields;
+
+  static bool classof(Stmt const* expr) {
+    return expr->get_kind() == SK_Struct;
+  }
+};
 
 class Block : public Expr {
  public:
@@ -164,6 +142,19 @@ class Block : public Expr {
   static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Block; }
 };
 
+class FnCall : public Expr {
+ public:
+  FnCall(Rc<FnDecl> func, Ptr<StructLiteral> args)
+      : Expr(SK_Call, func->_ret),
+        _fn(std::move(func)),
+        _args(std::move(args)) {}
+
+  Rc<FnDecl> _fn;
+  Ptr<StructLiteral> _args;
+
+  static bool classof(Stmt const* expr) { return expr->get_kind() == SK_Call; }
+};
+
 class If : public Expr {
  public:
   Ptr<Expr> _cond;
@@ -193,21 +184,20 @@ class VarRef : public Expr {
   }
 };
 
-// class FieldAccess : public Expr, public AllowAlloc<Context, FieldAccess> {
-//  public:
-//   not_null<Expr*> _base;
-//   not_null<FieldDecl*> _field;
-//
-//  private:
-//   friend AllowAlloc;
-//   FieldAccess(not_null<Expr*> base, not_null<FieldDecl*> field)
-//       : Expr(SK_FieldAccess, field->type()), _base(base), _field(field) {}
-//
-//  public:
-//   static bool classof(Stmt const* expr) {
-//     return expr->get_kind() == SK_FieldAccess;
-//   }
-// };
+class FieldAccess : public Expr {
+ public:
+  Ptr<Expr> _base;
+  Rc<FieldDecl> _field;
+
+  FieldAccess(Ptr<Expr> base, Rc<FieldDecl> field)
+      : Expr(SK_FieldAccess, field->type()),
+        _base(std::move(base)),
+        _field(std::move(field)) {}
+
+  static bool classof(Stmt const* expr) {
+    return expr->get_kind() == SK_FieldAccess;
+  }
+};
 
 class Builtin : public Expr {
  public:

@@ -59,8 +59,40 @@ struct Data {
         // NOTE: vardecl is a decl and possibly a stmt (if it has a value).
         // this only handles the decl part.
         auto& vardecl = llvm::cast<pt::VarDecl>(node);
-        return decl = std::make_unique<ast::VarDecl>(vardecl.name(),
+        return decl = std::make_shared<ast::VarDecl>(vardecl.name(),
                                                      get_type(vardecl._type));
+      }
+      case pt::Node::Kind::StructDecl: {
+        auto& structdecl = llvm::cast<pt::StructDecl>(node);
+        std::vector<Rc<ast::FieldDecl>> fields;
+        fields.reserve(structdecl._fields.size());
+
+        assert(structdecl._fields.size() <=
+               std::numeric_limits<uint8_t>::max());
+
+        for (pt::StructDecl::Field const& field : structdecl._fields) {
+          Rc<ast::Type> type = get_type(field.type);
+          auto index = static_cast<uint8_t>(fields.size());
+
+          auto fieldDecl = std::make_shared<ast::FieldDecl>(
+              field.name, std::move(type), index);
+
+          fields.push_back(std::move(fieldDecl));
+        }
+
+        auto astdecl = std::make_shared<ast::StructTy>(structdecl.name(),
+                                                       std::move(fields));
+        _ast->_types.push_back(astdecl);
+        return decl = std::move(astdecl);
+
+        // {
+        //   ast::FnDecl *constructor = env.get_struct_method(ast);
+        //
+        //   std::vector<ast::Stmt *> body;
+        //
+        //   auto *block = ast::Block::Create(*_ast, std::move(body),
+        //   _ast->_voidExpr); constructor->define(block);
+        // }
       }
       default:
         xerr("unable to lower decl {}", fmt::underlying(node.kind()));
@@ -330,9 +362,51 @@ struct Data {
         return std::make_unique<ast::Builtin>(
             table.at(binnode.op), std::move(args), args.front()->type());
       }
+      case pt::Node::Kind::FieldAccess: {
+        auto& fanode = llvm::cast<pt::FieldAccess>(node);
+        Ptr<ast::Expr> base = lower_expr(fanode.base);
+        Rc<ast::Type> type = base->type();
+        if (type->get_kind() != ast::Type::DeclKind::Struct) {
+          xerr("expected struct, got {}", fmt::underlying(type->get_kind()));
+        }
+        auto structTy =
+            std::static_pointer_cast<ast::StructTy>(std::move(type));
+        Rc<ast::FieldDecl> fielddecl = structTy->get_field(fanode.field);
+        return std::make_unique<ast::FieldAccess>(std::move(base),
+                                                  std::move(fielddecl));
+      }
+      case pt::Node::Kind::Call: {
+        auto& callnode = llvm::cast<pt::Call>(node);
+        auto* usenode =
+            llvm::dyn_cast<pt::DeclUse>(&_pt->get_node(callnode.fn));
+        if (usenode == nullptr) {
+          xerr("expected decluse got {}",
+               fmt::underlying(_pt->get_node(callnode.fn).kind()));
+        }
+        Rc<ast::Decl> fndecl = deref_decluse(*usenode);
+        if (fndecl->get_kind() != ast::Decl::DeclKind::Fn) {
+          xerr("expected fn, got {}", fmt::underlying(fndecl->get_kind()));
+        }
+        Rc<ast::FnDecl> func =
+            std::static_pointer_cast<ast::FnDecl>(std::move(fndecl));
+
+        Ptr<ast::StructLiteral> args =
+            lower_struct(llvm::cast<pt::Struct>(_pt->get_node(callnode.args)));
+        return std::make_unique<ast::FnCall>(func, std::move(args));
+      }
       default:
         xerr("unable to lower expr: {}", fmt::underlying(node.kind()));
     }
+  }
+
+  Ptr<ast::StructLiteral> lower_struct(pt::Struct const& node) {
+    std::vector<Ptr<ast::Expr>> fields;
+    fields.reserve(node.fields.size());
+
+    for (auto const& field : node.fields) {
+      fields.push_back(lower_expr(field.value));
+    }
+    return std::make_unique<ast::StructLiteral>(std::move(fields));
   }
 
   std::unique_ptr<pt::Context> _pt;

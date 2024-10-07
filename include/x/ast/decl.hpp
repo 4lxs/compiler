@@ -118,21 +118,18 @@ class VarDecl : public Stmt, public ValueDecl {
 //     return decl->get_kind() == DeclKind::Const;
 //   }
 // };
-//
-// class FieldDecl : public ValueDecl, public AllowAlloc<Context, FieldDecl> {
-//  public:
-//   /// index of field in struct
-//   uint8_t _index;
-//
-//  private:
-//   friend AllowAlloc;
-//   FieldDecl(std::string_view name, not_null<Type*> type, uint8_t index)
-//       : ValueDecl(DeclKind::Field, name, type), _index(index) {}
-//
-//  public:
-//   static bool classof(Decl const* decl) {
-//     return decl->get_kind() == DeclKind::Field;
-//   }
-// };
+
+class FieldDecl : public ValueDecl {
+ public:
+  FieldDecl(std::string_view name, Rc<Type> type, uint8_t index)
+      : ValueDecl(DeclKind::Field, name, std::move(type)), _index(index) {}
+
+  /// index of field in struct
+  uint8_t _index;
+
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::Field;
+  }
+};
 
 }  // namespace x::ast

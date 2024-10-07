@@ -55,4 +55,26 @@ void VarDecl::dump(Context &ctx, uint8_t indent) {
   }
 }
 
+void StructDecl::nameres(sema::NameResolver &res) {
+  for (Field &field : _fields) {
+    res._ctx->get_node(field.type).nameres(res);
+    if (field.defaultVal.has_value()) {
+      res._ctx->get_node(field.defaultVal.value()).nameres(res);
+    }
+  }
+}
+
+void StructDecl::dump(Context &ctx, uint8_t indent) {
+  fmt::print("{:{}}StructDecl: {}\n", "", indent, name());
+  for (Field const &field : _fields) {
+    fmt::print("{:{}}field: {}\n", "", indent + 2, field.name);
+    fmt::print("{:{}}type:\n", "", indent + 3);
+    ctx.get_node(field.type).dump(ctx, indent + 4);
+    if (field.defaultVal.has_value()) {
+      fmt::print("{:{}}val:\n", "", indent + 3);
+      ctx.get_node(field.defaultVal.value()).dump(ctx, indent + 4);
+    }
+  }
+}
+
 }  // namespace x::pt

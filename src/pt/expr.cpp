@@ -62,4 +62,40 @@ void DeclUse::dump(Context& ctx, uint8_t indent) {
   node.dump(ctx, indent + 2);
 }
 
+void Call::nameres(sema::NameResolver& res) {
+  res._ctx->get_node(fn).nameres(res);
+  res._ctx->get_node(args).nameres(res);
+}
+
+void Call::dump(Context& ctx, uint8_t indent) {
+  fmt::print("{:{}}Call\n", "", indent);
+  fmt::print("{:{}}fn\n", "", indent + 1);
+  ctx.get_node(fn).dump(ctx, indent + 2);
+  fmt::print("{:{}}args\n", "", indent + 1);
+  ctx.get_node(args).dump(ctx, indent + 2);
+}
+
+void Struct::nameres(sema::NameResolver& res) {
+  for (Field const& field : fields) {
+    res._ctx->get_node(field.value).nameres(res);
+  }
+}
+
+void Struct::dump(Context& ctx, uint8_t indent) {
+  fmt::print("{:{}}Struct\n", "", indent);
+  for (Field const& field : fields) {
+    fmt::print("{:{}}{}:\n", "", indent + 1, field.name);
+    ctx.get_node(field.value).dump(ctx, indent + 2);
+  }
+}
+
+void FieldAccess::nameres(sema::NameResolver& res) {
+  res._ctx->get_node(base).nameres(res);
+}
+
+void FieldAccess::dump(Context& ctx, uint8_t indent) {
+  fmt::print("{:{}}FieldAccess: {}\n", "", indent, field);
+  ctx.get_node(base).dump(ctx, indent + 2);
+}
+
 }  // namespace x::pt
