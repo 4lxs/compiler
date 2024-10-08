@@ -180,7 +180,7 @@ class Struct : public Node {
   }
 };
 
-class FieldAccess : public Node {
+class Selector : public Node {
  public:
   NodeId base;
   std::string field;
@@ -191,7 +191,7 @@ class FieldAccess : public Node {
 
  private:
   friend Context;
-  FieldAccess(NodeId base, std::string field)
+  Selector(NodeId base, std::string field)
       : Node(Node::Kind::FieldAccess), base(base), field(std::move(field)) {}
 
  public:

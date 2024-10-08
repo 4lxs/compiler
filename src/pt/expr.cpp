@@ -89,12 +89,12 @@ void Struct::dump(Context& ctx, uint8_t indent) {
   }
 }
 
-void FieldAccess::nameres(sema::NameResolver& res) {
+void Selector::nameres(sema::NameResolver& res) {
   res._ctx->get_node(base).nameres(res);
 }
 
-void FieldAccess::dump(Context& ctx, uint8_t indent) {
-  fmt::print("{:{}}FieldAccess: {}\n", "", indent, field);
+void Selector::dump(Context& ctx, uint8_t indent) {
+  fmt::print("{:{}}Selector: {}\n", "", indent, field);
   ctx.get_node(base).dump(ctx, indent + 2);
 }
 

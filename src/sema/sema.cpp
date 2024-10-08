@@ -490,16 +490,7 @@ void Sema::add(pt::Module const &module) {
 //   ast->Create(pt->_name);
 // }
 //
-// void Sema::define(ast::StructTy *ast, pt::EnumDecl *pt) {
-//   std::vector<std::string> variants;
-//   variants.reserve(pt->_variants.size());
-//
-//   for (pt::EnumDecl::Variant const &variant : pt->_variants) {
-//     variants.push_back(variant.name);
-//   }
-//
-//   // ast->define(std::move(variants));
-// }
+// void Sema::define(ast::StructTy *ast, pt::EnumDecl *pt) {}
 //
 // not_null<ast::Type *> Sema::define(pt::TypeDecl *pt, ast::Type *ref) {
 //   not_null<ast::Type *> ast = env.resolve_type(pt->_type);

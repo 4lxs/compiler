@@ -317,7 +317,7 @@ std::any Visitor::visitMemberE(parser::XParser::MemberEContext* ctx) {
   pt::NodeId base = _stack.pop();
 
   pt::NodeId field =
-      _ctx->create<pt::FieldAccess>(base, ctx->Ident()->getText()).id();
+      _ctx->create<pt::Selector>(base, ctx->Ident()->getText()).id();
 
   _stack.push(field);
 

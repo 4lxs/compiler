@@ -22,7 +22,7 @@ class BoolE;
 class StringE;
 class Block;
 class DeclUse;
-class FieldAccess;
+class Selector;
 
 class Primitive;
 class ParamDecl;

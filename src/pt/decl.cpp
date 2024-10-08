@@ -77,4 +77,13 @@ void StructDecl::dump(Context &ctx, uint8_t indent) {
   }
 }
 
+void EnumDecl::nameres(sema::NameResolver & /*res*/) {}
+
+void EnumDecl::dump(Context &ctx, uint8_t indent) {
+  fmt::print("{:{}}EnumDecl: {}\n", "", indent, name());
+  for (Variant const &variant : _variants) {
+    fmt::print("{:{}}variant: {}\n", "", indent + 2, variant.name);
+  }
+}
+
 }  // namespace x::pt

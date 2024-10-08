@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "fwd_decl.hpp"
+#include "x/common.hpp"
 #include "x/pt/context.hpp"
 #include "x/pt/node.hpp"
 #include "x/pt/sema/nameresolution.hpp"
@@ -137,19 +138,29 @@ class StructDecl : public Decl {
         _fields(std::move(fields)) {}
 };
 
-class EnumDecl : public Node {
+class EnumDecl : public Decl {
  public:
   struct Variant {
     std::string name;
   };
-  std::string _name;
   std::vector<Variant> _variants;
+
+  [[nodiscard]] size_t get_variant_index(std::string_view name) const {
+    for (size_t i = 0; i < _variants.size(); ++i) {
+      if (_variants[i].name == name) {
+        return i;
+      }
+    }
+    xerr("variant not found: {}", name);
+  }
+
+  void nameres(sema::NameResolver &res) override;
+  void dump(Context &ctx, uint8_t indent) override;
 
  private:
   friend Context;
   explicit EnumDecl(std::string name, std::vector<Variant> &&variants)
-      : Node(Node::Kind::EnumDecl),
-        _name(std::move(name)),
+      : Decl(Node::Kind::EnumDecl, std::move(name)),
         _variants(std::move(variants)) {}
 };
 

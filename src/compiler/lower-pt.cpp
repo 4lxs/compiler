@@ -14,7 +14,6 @@
 #include "x/pt/decl.hpp"
 #include "x/pt/expr.hpp"
 #include "x/pt/node.hpp"
-#include "x/pt/sema/nameresolution.hpp"
 #include "x/pt/stmt.hpp"
 
 namespace x {
@@ -94,6 +93,15 @@ struct Data {
         //   _ast->_voidExpr); constructor->define(block);
         // }
       }
+      case pt::Node::Kind::EnumDecl: {
+        auto& enumdecl = llvm::cast<pt::EnumDecl>(node);
+
+        auto discriminator = std::make_shared<ast::LiteralTy>(
+            ast::LiteralTy::Kind::I32, enumdecl.name());
+
+        _ast->_types.push_back(discriminator);
+        return decl = std::move(discriminator);
+      }
       default:
         xerr("unable to lower decl {}", fmt::underlying(node.kind()));
     }
@@ -119,7 +127,8 @@ struct Data {
     //     params.push_back(ast::FnDecl::Param(pt->name(), recvtyp));
     //   }
     //
-    //   pt->_mangledName = fmt::format("{}%s{}", recvtyp->name(), pt->name());
+    //   pt->_mangledName = fmt::format("{}%s{}", recvtyp->name(),
+    //   pt->name());
     // } else {
     //   pt->_mangledName = pt->name();
     // }
@@ -189,8 +198,8 @@ struct Data {
         xerr("expected stmt or decl, got {}", fmt::underlying(stmtnode.kind()));
       }
 
-      // NOTE: vardecl is a decl and a stmt. we need to declare it first, before
-      // assigning to it
+      // NOTE: vardecl is a decl and a stmt. we need to declare it first,
+      // before assigning to it
       if (stmtnode.is_decl()) {
         _currentFunction->localvars.push_back(lower_decl(stmtnode));
       }
@@ -328,6 +337,7 @@ struct Data {
       }
       case pt::Node::Kind::DeclUse: {
         auto& use = llvm::cast<pt::DeclUse>(node);
+        spdlog::info("DeclUse: {}", format_as(use._var));
         Rc<ast::Decl> decl = deref_decluse(use);
         if (decl->get_kind() != ast::Decl::DeclKind::Var) {
           xerr("expected var, got {}", fmt::underlying(decl->get_kind()));
@@ -362,19 +372,8 @@ struct Data {
         return std::make_unique<ast::Builtin>(
             table.at(binnode.op), std::move(args), args.front()->type());
       }
-      case pt::Node::Kind::FieldAccess: {
-        auto& fanode = llvm::cast<pt::FieldAccess>(node);
-        Ptr<ast::Expr> base = lower_expr(fanode.base);
-        Rc<ast::Type> type = base->type();
-        if (type->get_kind() != ast::Type::DeclKind::Struct) {
-          xerr("expected struct, got {}", fmt::underlying(type->get_kind()));
-        }
-        auto structTy =
-            std::static_pointer_cast<ast::StructTy>(std::move(type));
-        Rc<ast::FieldDecl> fielddecl = structTy->get_field(fanode.field);
-        return std::make_unique<ast::FieldAccess>(std::move(base),
-                                                  std::move(fielddecl));
-      }
+      case pt::Node::Kind::FieldAccess:
+        return lower_selector(llvm::cast<pt::Selector>(node));
       case pt::Node::Kind::Call: {
         auto& callnode = llvm::cast<pt::Call>(node);
         auto* usenode =
@@ -397,6 +396,52 @@ struct Data {
       default:
         xerr("unable to lower expr: {}", fmt::underlying(node.kind()));
     }
+  }
+
+  /// selector may be one of a multitude of things like field access, method
+  /// call, package access, static method, ...
+  Ptr<ast::Expr> lower_selector(pt::Selector const& selnode) {
+    spdlog::info("Selector: {}", selnode.field);
+    pt::Node& basenode = _pt->get_node(selnode.base);
+
+    if (basenode.kind() != pt::Node::Kind::DeclUse) {
+      return lower_field_access(selnode);
+    }
+
+    auto& usenode = llvm::cast<pt::DeclUse>(basenode);
+    Rc<ast::Decl> decl = deref_decluse(usenode);
+
+    if (decl->is_value()) {
+      return lower_field_access(selnode);
+    }
+
+    pt::Node& declnode = _pt->get_node(usenode.definition());
+
+    switch (declnode.kind()) {
+      case pt::Node::Kind::EnumDecl: {
+        auto& enumdecl = llvm::cast<pt::EnumDecl>(declnode);
+        size_t ind = enumdecl.get_variant_index(selnode.field);
+
+        auto type = std::static_pointer_cast<ast::LiteralTy>(std::move(decl));
+        constexpr size_t bits = 32;
+        return std::make_unique<ast::IntegerLiteral>(llvm::APInt(bits, ind),
+                                                     type);
+      }
+      default:
+        xerr("unexpected selector base: {}", fmt::underlying(declnode.kind()));
+    }
+  }
+
+  Ptr<ast::FieldAccess> lower_field_access(pt::Selector const& fanode) {
+    Ptr<ast::Expr> base = lower_expr(fanode.base);
+    Rc<ast::Type> type = base->type();
+    if (type->get_kind() != ast::Type::DeclKind::Struct) {
+      xerr("expected struct, got {}", fmt::underlying(type->get_kind()));
+    }
+    auto structTy = std::static_pointer_cast<ast::StructTy>(std::move(type));
+    Rc<ast::FieldDecl> fielddecl = structTy->get_field(fanode.field);
+    return std::make_unique<ast::FieldAccess>(std::move(base),
+                                              std::move(fielddecl));
   }
 
   Ptr<ast::StructLiteral> lower_struct(pt::Struct const& node) {
