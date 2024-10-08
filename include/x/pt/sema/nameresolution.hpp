@@ -155,10 +155,12 @@ class NameResolver {
 
   void exit_scope() {
     spdlog::info("exit scope");
+    assert(!_names.empty());
     auto itr = std::find_if(_names.rbegin(), _names.rend(), [](auto const &e) {
       return std::holds_alternative<Scope>(e);
     });
-    _names.erase(itr.base(), _names.end());
+    // don't know why -1 is needed
+    _names.erase(itr.base() - 1, _names.end());
   }
 
   Context *_ctx;
@@ -194,6 +196,10 @@ class NameResolver {
       }
 
       xerr("unimplemented overloading");
+    }
+
+    if (local) {
+      return {};
     }
 
     if (auto itr = _globals.find(name); itr != _globals.end()) {
