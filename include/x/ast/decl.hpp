@@ -16,13 +16,15 @@ class Decl {
  public:
   enum class DeclKind {
     ValueBegin,
-    Fn,
     Var,
     Const,
     Field,
-    ValueEnd,
 
     Type,
+    // value types
+    Fn,
+    ValueEnd,
+
     Literal,
     Struct,
     Union,

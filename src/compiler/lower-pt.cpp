@@ -339,10 +339,10 @@ struct Data {
         auto& use = llvm::cast<pt::DeclUse>(node);
         spdlog::info("DeclUse: {}", format_as(use._var));
         Rc<ast::Decl> decl = deref_decluse(use);
-        if (decl->get_kind() != ast::Decl::DeclKind::Var) {
-          xerr("expected var, got {}", fmt::underlying(decl->get_kind()));
+        if (!decl->is_value()) {
+          xerr("expected value, got {}", fmt::underlying(decl->get_kind()));
         }
-        auto var = std::static_pointer_cast<ast::VarDecl>(std::move(decl));
+        auto var = std::static_pointer_cast<ast::ValueDecl>(std::move(decl));
         return std::make_unique<ast::VarRef>(var, var->type());
       }
       case pt::Node::Kind::If: {
@@ -376,6 +376,9 @@ struct Data {
         return lower_selector(llvm::cast<pt::Selector>(node));
       case pt::Node::Kind::Call: {
         auto& callnode = llvm::cast<pt::Call>(node);
+
+        Ptr<ast::Expr> fnexpr = lower_expr(callnode.fn);
+        spdlog::info("Call: {}", fmt::underlying(fnexpr->type()->get_kind()));
         auto* usenode =
             llvm::dyn_cast<pt::DeclUse>(&_pt->get_node(callnode.fn));
         if (usenode == nullptr) {

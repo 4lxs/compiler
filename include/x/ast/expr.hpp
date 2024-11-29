@@ -174,9 +174,9 @@ class If : public Expr {
 
 class VarRef : public Expr {
  public:
-  Rc<VarDecl> _decl;
+  Rc<ValueDecl> _decl;
 
-  explicit VarRef(Rc<VarDecl> decl, Rc<Type> type)
+  explicit VarRef(Rc<ValueDecl> decl, Rc<Type> type)
       : Expr(SK_VarRef, std::move(type)), _decl(std::move(decl)) {}
 
   static bool classof(Stmt const* expr) {

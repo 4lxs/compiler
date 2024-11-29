@@ -90,4 +90,19 @@ class StructTy : public Type {
 //   }
 // };
 //
+
+class FnTy : public Type {
+ public:
+  struct Param {
+    Rc<Type> type;
+  };
+  FnTy(std::string_view name, std::vector<Param>&& params, Rc<Type> ret)
+      : Type(DeclKind::FnTy, name), _params(std::move(params)), _ret(ret) {};
+  std::vector<Param> _params;
+  Rc<Type> _ret;
+  static bool classof(Decl const* decl) {
+    return decl->get_kind() == DeclKind::FnTy;
+  }
+};
+
 }  // namespace x::ast

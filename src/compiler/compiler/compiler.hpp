@@ -137,7 +137,12 @@ class Compiler {
       }
       case ast::Stmt::SK_VarRef: {
         auto const& declRef = llvm::cast<ast::VarRef>(expr);
-        llvm::AllocaInst* allocaInst = declRef._decl->_alloca;
+        if (declRef._decl->get_kind() != ast::Decl::DeclKind::Var) {
+          xerr("expected VarDecl, got {}",
+               fmt::underlying(declRef._decl->get_kind()));
+        }
+        llvm::AllocaInst* allocaInst =
+            llvm::cast<ast::VarDecl>(*declRef._decl)._alloca;
         assert(allocaInst != nullptr);
         return Value{allocaInst, allocaInst->getAllocatedType()};
       }
